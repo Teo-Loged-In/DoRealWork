@@ -1,0 +1,15 @@
+# Word temp/lock files
+~$*.docx
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Secrets – NIEMALS committen
+.env
+.env.local
+*.key
+secrets.txt
+
+# Node (falls später)
+node_modules/
