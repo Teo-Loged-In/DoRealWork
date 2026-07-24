@@ -21,7 +21,8 @@ DoRealWork **denkt für dich**: ein persönlicher KI-Coach, der
 
 ## Status
 
-🟡 In Entwicklung – siehe [Progress-Log](docs/progress/) für den Fortschritt über alle Prompts hinweg.
+🟢 **LIVE & funktionsfähig:** https://teo-loged-in.github.io/DoRealWork/ (Offline-KI-Modus)
+🟡 Nächster Schritt: Vercel-Deploy für echte Live-KI (Claude API). Siehe [Progress-Log](docs/progress/).
 
 ## Tech (geplant)
 
