@@ -59,6 +59,29 @@ const LS = {
 };
 const timeOfDay = () => { const h = new Date().getHours(); return h < 11 ? 'Morgen' : h < 15 ? 'Mittag' : h < 19 ? 'Nachmittag' : 'Abend'; };
 
+/* ============================ Abo / Subscription ============================ */
+const TRIAL_DAYS = 7;
+const DAY_MS = 86400000;
+const PLANS = {
+  monthly: { id: 'monthly', label: 'Monatlich', price: '4,99 €', per: '/ Monat', note: 'Jederzeit kündbar' },
+  yearly: { id: 'yearly', label: 'Jährlich', price: '39,99 €', per: '/ Jahr', note: 'Spare 33 % · ~3,33 €/Monat' },
+};
+function subState(sub) {
+  if (!sub || sub.status === 'none') return 'none';
+  if (sub.status === 'active') return 'active';
+  if (sub.status === 'canceled') return 'canceled';
+  if (sub.status === 'trial') {
+    const end = new Date(sub.trialStart).getTime() + TRIAL_DAYS * DAY_MS;
+    return Date.now() < end ? 'trial' : 'expired';
+  }
+  return sub.status;
+}
+function trialDaysLeft(sub) {
+  if (!sub || !sub.trialStart) return 0;
+  const end = new Date(sub.trialStart).getTime() + TRIAL_DAYS * DAY_MS;
+  return Math.max(0, Math.ceil((end - Date.now()) / DAY_MS));
+}
+
 /* ============================ AI call (mit lokalem Fallback) ============================ */
 async function askCoach(type, payload) {
   try {
@@ -195,6 +218,7 @@ function ChatText({ text }) {
 /* ============================ Root App ============================ */
 function App() {
   const [profile, setProfile] = useState(() => LS.get('drw_profile', null));
+  const [sub, setSub] = useState(() => LS.get('drw_sub', null));
   const [coach, setCoach] = useState(() => LS.get('drw_coach', null));
   const [assistant, setAssistant] = useState(() => LS.get('drw_assistant', []));
   const [state, setState] = useState(() => freshOrLoad());
@@ -205,6 +229,7 @@ function App() {
   const [lastSession, setLastSession] = useState(null);
 
   useEffect(() => LS.set('drw_profile', profile), [profile]);
+  useEffect(() => LS.set('drw_sub', sub), [sub]);
   useEffect(() => LS.set('drw_coach', coach), [coach]);
   useEffect(() => LS.set('drw_assistant', assistant), [assistant]);
   useEffect(() => LS.set('drw_state', state), [state]);
@@ -224,6 +249,12 @@ function App() {
   }
 
   if (!profile) return <Onboarding onDone={async p => { setProfile(p); await generateMethods(p); }} />;
+
+  // Abo-Gate: nach Onboarding erst Trial starten, nach Ablauf Paywall
+  if (!sub || sub.status === 'none') return <TrialStart profile={profile} onStart={email => setSub({ status: 'trial', trialStart: new Date().toISOString(), email: email || null, plan: null })} />;
+  const sState = subState(sub);
+  if (sState === 'expired' || sState === 'canceled')
+    return <Paywall sub={sub} onSubscribe={plan => setSub({ status: 'active', plan, trialStart: sub.trialStart, activatedAt: new Date().toISOString() })} onReset={() => { ['drw_profile', 'drw_coach', 'drw_assistant', 'drw_state', 'drw_sub'].forEach(k => LS.set(k, null)); location.reload(); }} />;
 
   async function generateMethods(p) {
     setCoach(c => ({ ...(c || {}), loading: true }));
@@ -267,10 +298,12 @@ function App() {
 
       {/* Main */}
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
-        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
+        <TrialBanner sub={sub} onManage={() => nav('account')} />
+        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state','drw_sub'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
         {view === 'method' && activeMethod && <MethodDetail method={activeMethod} profile={profile} coach={coach} setCoach={setCoach} onBack={() => setView('dashboard')} />}
         {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} />}
         {view === 'insights' && <Insights state={state} />}
+        {view === 'account' && <AccountScreen sub={sub} setSub={setSub} onBack={() => nav('dashboard')} />}
         {view === 'assistant' && <div className="lg:hidden h-[calc(100vh-6rem)]"><Assistant profile={profile} coach={coach} state={state} messages={assistant} setMessages={setAssistant} /></div>}
       </main>
 
@@ -744,6 +777,131 @@ function Insights({ state }) {
   );
 }
 function Stat({ label, value, suffix }) { return <div className="glass rounded-2xl p-4 text-center"><div className="text-2xl font-black grad-text">{value}<span className="text-sm text-zinc-500 font-bold ml-0.5">{suffix}</span></div><div className="text-[11px] uppercase tracking-wider text-zinc-500 mt-0.5">{label}</div></div>; }
+
+/* ============================ Abo-Screens ============================ */
+const TRIAL_BENEFITS = [
+  { icon: '🚀', t: 'KI-Methoden zu jedem Ziel', d: 'Die schnellsten Wege — individuell für dich generiert.' },
+  { icon: '💬', t: 'Persönlicher KI-Coach', d: 'Immer da: frag alles, bekomm deinen nächsten Schritt.' },
+  { icon: '📸', t: 'Foto- & Form-Check', d: 'Übungen & Mahlzeiten per Kamera analysieren lassen.' },
+  { icon: '🔒', t: 'Fokus-Sessions + Brain Battery', d: 'Locked in bleiben, ohne auszubrennen.' },
+];
+
+function TrialStart({ profile, onStart }) {
+  const [email, setEmail] = useState('');
+  return (
+    <div className="min-h-screen ambient flex items-center justify-center p-5">
+      <div className="w-full max-w-md glass rounded-3xl p-7 animate-fadeUp">
+        <div className="text-4xl mb-3">🎁</div>
+        <h1 className="text-2xl font-extrabold mb-1">7 Tage kostenlos testen</h1>
+        <p className="text-zinc-400 text-sm mb-5">Dein Coach für <span className="text-zinc-200 font-semibold">„{profile.goal}"</span> steht bereit. Teste alles 7 Tage gratis.</p>
+        <div className="space-y-3 mb-5">
+          {TRIAL_BENEFITS.map((b, i) => (
+            <div key={i} className="flex gap-3"><span className="text-xl">{b.icon}</span><div><div className="text-sm font-semibold">{b.t}</div><div className="text-xs text-zinc-400">{b.d}</div></div></div>
+          ))}
+        </div>
+        <div className="glass rounded-2xl p-3 mb-4 text-xs text-zinc-300 flex items-center gap-2">
+          <span className="text-emerald-400">✓</span> Keine Kreditkarte nötig · danach {PLANS.monthly.price}{PLANS.monthly.per} · jederzeit kündbar
+        </div>
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="E-Mail (optional — sichert deinen Account)"
+          className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60 mb-3 text-sm" />
+        <button onClick={() => onStart(email.trim())} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">🎁 7 Tage gratis starten</button>
+        <p className="text-[11px] text-zinc-500 text-center mt-3">Ohne Zahlungsdaten. Wir erinnern dich vor Ablauf.</p>
+      </div>
+    </div>
+  );
+}
+
+function PlanCards({ plan, setPlan }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 mb-4">
+      {Object.values(PLANS).map(pl => (
+        <button key={pl.id} onClick={() => setPlan(pl.id)} className={'text-left rounded-2xl p-4 border transition relative ' + (plan === pl.id ? 'border-violet-400/70 bg-violet-500/10' : 'border-white/10 bg-white/5 hover:border-white/25')}>
+          {pl.id === 'yearly' && <span className="absolute -top-2 right-3 text-[10px] px-2 py-0.5 rounded-full btn-primary text-white font-semibold">Beliebt</span>}
+          <div className="text-sm font-semibold">{pl.label}</div>
+          <div className="text-xl font-black mt-1">{pl.price}<span className="text-xs text-zinc-500 font-medium">{pl.per}</span></div>
+          <div className="text-[11px] text-zinc-400 mt-1">{pl.note}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+const DemoPayNote = () => <p className="text-[11px] text-zinc-500 text-center mt-3">🔒 Demo-Modus: In der Live-Version öffnet sich hier der sichere Stripe-Checkout. Es wird jetzt kein Geld abgebucht.</p>;
+
+function Paywall({ sub, onSubscribe, onReset }) {
+  const [plan, setPlan] = useState('yearly');
+  return (
+    <div className="min-h-screen ambient flex items-center justify-center p-5">
+      <div className="w-full max-w-md glass rounded-3xl p-7 animate-fadeUp">
+        <div className="text-4xl mb-3">⏳</div>
+        <h1 className="text-2xl font-extrabold mb-1">Dein Gratis-Test ist vorbei</h1>
+        <p className="text-zinc-400 text-sm mb-5">Bleib dran an deinem Ziel — schalte deinen KI-Coach dauerhaft frei.</p>
+        <PlanCards plan={plan} setPlan={setPlan} />
+        <button onClick={() => onSubscribe(plan)} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">Jetzt abonnieren · {PLANS[plan].price}{PLANS[plan].per}</button>
+        <DemoPayNote />
+        <button onClick={onReset} className="block mx-auto mt-5 text-xs text-zinc-600 hover:text-zinc-400">App zurücksetzen</button>
+      </div>
+    </div>
+  );
+}
+
+function TrialBanner({ sub, onManage }) {
+  const st = subState(sub);
+  if (st === 'trial') {
+    const d = trialDaysLeft(sub);
+    return (
+      <div className="sticky top-0 z-30 bg-violet-600/20 backdrop-blur border-b border-violet-400/20 px-5 py-2 text-sm flex items-center justify-between">
+        <span>🎁 Gratis-Test: noch <b>{d}</b> {d === 1 ? 'Tag' : 'Tage'}</span>
+        <button onClick={onManage} className="text-violet-200 hover:text-white font-semibold">Abo verwalten →</button>
+      </div>
+    );
+  }
+  if (st === 'active') {
+    return (
+      <div className="sticky top-0 z-30 bg-emerald-600/15 backdrop-blur border-b border-emerald-400/20 px-5 py-2 text-sm flex items-center justify-between">
+        <span>✓ Abo aktiv{sub.plan && PLANS[sub.plan] ? ` · ${PLANS[sub.plan].label}` : ''}</span>
+        <button onClick={onManage} className="text-emerald-200 hover:text-white font-semibold">Verwalten →</button>
+      </div>
+    );
+  }
+  return null;
+}
+
+function AccountScreen({ sub, setSub, onBack }) {
+  const st = subState(sub);
+  const [plan, setPlan] = useState(sub.plan || 'yearly');
+  return (
+    <div className="max-w-lg mx-auto px-5 pt-8">
+      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white mb-4">← Zurück</button>
+      <h1 className="text-2xl font-extrabold mb-6">Dein Abo</h1>
+
+      <div className="glass rounded-2xl p-5 mb-6">
+        <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-1">Status</div>
+        {st === 'trial' && <div className="text-lg font-bold">🎁 Gratis-Test — noch {trialDaysLeft(sub)} Tage</div>}
+        {st === 'active' && <div className="text-lg font-bold text-emerald-400">✓ Aktiv{sub.plan && PLANS[sub.plan] ? ` · ${PLANS[sub.plan].label} (${PLANS[sub.plan].price}${PLANS[sub.plan].per})` : ''}</div>}
+        {(st === 'expired' || st === 'canceled') && <div className="text-lg font-bold text-amber-300">Nicht aktiv</div>}
+        {sub.email && <div className="text-xs text-zinc-500 mt-1">Account: {sub.email}</div>}
+      </div>
+
+      {st !== 'active' && (
+        <div className="mb-6">
+          <h2 className="font-bold mb-3">Plan wählen</h2>
+          <PlanCards plan={plan} setPlan={setPlan} />
+          <button onClick={() => setSub({ status: 'active', plan, trialStart: sub.trialStart, email: sub.email, activatedAt: new Date().toISOString() })} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">Jetzt abonnieren · {PLANS[plan].price}{PLANS[plan].per}</button>
+          <DemoPayNote />
+        </div>
+      )}
+
+      {st === 'active' && (
+        <button onClick={() => setSub({ ...sub, status: 'canceled', canceledAt: new Date().toISOString() })} className="w-full py-3 rounded-2xl bg-white/5 border border-white/10 hover:border-red-400/40 text-sm text-zinc-300 mb-6">Abo kündigen</button>
+      )}
+
+      <div className="glass rounded-2xl p-4 opacity-80">
+        <div className="text-xs text-zinc-500 mb-2">🧪 Demo-Werkzeuge (nur zum Testen des Ablaufs)</div>
+        <button onClick={() => setSub({ ...sub, status: 'trial', trialStart: new Date(Date.now() - (TRIAL_DAYS + 1) * DAY_MS).toISOString() })} className="text-sm text-zinc-400 hover:text-white underline">Trial-Ende simulieren (zeigt die Paywall)</button>
+      </div>
+    </div>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
