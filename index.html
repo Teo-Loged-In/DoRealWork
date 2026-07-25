@@ -3,48 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>DoRealWork — Trainiere deinen Fokus</title>
-  <meta name="description" content="Der KI-Fokus-Coach, der deinen Fokus trainiert statt trackt — und dich stoppt, bevor du ausbrennst." />
+  <title>DoRealWork — Dein KI-Ziel-Coach</title>
+  <meta name="description" content="Sag dein Ziel — dein KI-Coach zeigt dir die schnellsten Methoden, coacht dich in jeder Disziplin und hält dich locked in, ohne auszubrennen." />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-          colors: {
-            ink: '#07070c',
-            panel: '#101019',
-          },
-          keyframes: {
-            floaty: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } },
-            pulseSoft: { '0%,100%': { opacity: 1 }, '50%': { opacity: .55 } },
-            fadeUp: { '0%': { opacity: 0, transform: 'translateY(12px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } },
-          },
-          animation: {
-            floaty: 'floaty 4s ease-in-out infinite',
-            pulseSoft: 'pulseSoft 2.4s ease-in-out infinite',
-            fadeUp: 'fadeUp .5s ease both',
-          }
-        }
-      }
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        keyframes: {
+          floaty: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } },
+          fadeUp: { '0%': { opacity: 0, transform: 'translateY(12px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } },
+          spinSlow: { to: { transform: 'rotate(360deg)' } },
+        },
+        animation: { floaty: 'floaty 4s ease-in-out infinite', fadeUp: 'fadeUp .5s ease both', spinSlow: 'spinSlow 1s linear infinite' }
+      } }
     }
   </script>
   <style>
     html, body { background: #07070c; }
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: #26263a; border-radius: 999px; }
     .glass { background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(12px); }
     .grad-text { background: linear-gradient(100deg,#a78bfa,#818cf8 40%,#f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .btn-primary { background: linear-gradient(100deg,#6d5efc,#8b5cf6 55%,#d946ef); }
     .btn-primary:hover { filter: brightness(1.08); }
     .ambient { background:
-      radial-gradient(60% 50% at 20% 0%, rgba(124,92,255,0.18), transparent 60%),
-      radial-gradient(50% 45% at 90% 10%, rgba(217,70,239,0.12), transparent 60%),
-      radial-gradient(55% 50% at 50% 100%, rgba(56,189,248,0.10), transparent 60%); }
+      radial-gradient(60% 50% at 15% 0%, rgba(124,92,255,0.16), transparent 60%),
+      radial-gradient(50% 45% at 95% 5%, rgba(217,70,239,0.10), transparent 60%),
+      radial-gradient(55% 50% at 50% 100%, rgba(56,189,248,0.08), transparent 60%); }
     input, textarea, select { font-family: inherit; }
+    .chat-scroll { scrollbar-width: thin; }
+    .prose-chat p { margin: 0 0 .5rem; }
   </style>
 </head>
 <body class="text-zinc-100 antialiased">
@@ -65,542 +57,640 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-
-const timeOfDay = () => {
-  const h = new Date().getHours();
-  if (h < 11) return 'Morgen';
-  if (h < 15) return 'Mittag';
-  if (h < 19) return 'Nachmittag';
-  return 'Abend';
-};
+const timeOfDay = () => { const h = new Date().getHours(); return h < 11 ? 'Morgen' : h < 15 ? 'Mittag' : h < 19 ? 'Nachmittag' : 'Abend'; };
 
 /* ============================ AI call (mit lokalem Fallback) ============================ */
 async function askCoach(type, payload) {
   try {
-    const r = await fetch('/api/coach', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type, payload }),
-    });
+    const r = await fetch('/api/coach', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type, payload }) });
     const data = await r.json();
     if (data && data.ok && data.result) return { source: 'ai', ...data.result };
   } catch (_) {}
-  // Fallback: lokale, regelbasierte Intelligenz -> App funktioniert IMMER
-  if (type === 'plan') return { source: 'local', ...localPlan(payload) };
-  if (type === 'debrief') return { source: 'local', ...localDebrief(payload) };
-  return { source: 'local' };
+  const fb = { plan: localPlan, debrief: localDebrief, methods: localMethods, approach: localApproach, chat: localChat, formcheck: localFormcheck }[type];
+  return { source: 'local', ...(fb ? fb(payload) : {}) };
 }
+
+/* ---------- Fallbacks (App funktioniert immer, auch ohne Live-KI) ---------- */
+function goalDomain(goal = '') {
+  const g = goal.toLowerCase();
+  if (/körper|abnehm|muskel|fit|gym|training|sport|gewicht|kraft|laufen|ausdauer/.test(g)) return 'fitness';
+  if (/start.?up|gründ|business|firma|unternehmen|selbstständig|geschäft|side.?hustle|umsatz/.test(g)) return 'business';
+  if (/abi|prüfung|klausur|lernen|studium|noten|schule|uni|examen|vokab/.test(g)) return 'learning';
+  if (/schlaf|müde|energie|stress|burnout|achtsam|meditat/.test(g)) return 'health';
+  return 'general';
+}
+const METHOD_TEMPLATES = {
+  fitness: {
+    intro: 'Der schnellste Weg zu einem besseren Körper: progressives Krafttraining + genug Protein + Schlaf. Der Rest ist Konsistenz.',
+    methods: [
+      { icon: '🏋️', title: 'Krafttraining (progressiv)', summary: 'Muskeln + Stoffwechsel: der größte Hebel für Körperkomposition.' },
+      { icon: '🥩', title: 'Ernährung & Protein', summary: 'Kaloriendefizit/-überschuss + ~1,6 g Protein/kg entscheidet über Fett & Muskel.' },
+      { icon: '😴', title: 'Schlaf & Regeneration', summary: 'Ohne Erholung kein Muskelaufbau und mehr Heißhunger.' },
+      { icon: '🚶', title: 'Alltagsbewegung (NEAT)', summary: '8-10k Schritte verbrennen oft mehr als jedes Cardio.' },
+      { icon: '📅', title: 'Konsistenz-System', summary: 'Feste Zeiten + Tracking schlagen jede perfekte Einzel-Session.' },
+    ],
+    blockerHelp: 'Gegen dein Hindernis: (1) mach die erste Hürde winzig (Sportsachen abends rauslegen), (2) plane Training als festen Termin, (3) koppel es an eine Belohnung.',
+  },
+  business: {
+    intro: 'Der schnellste Weg zum Startup: ein echtes Problem finden, ein Mini-Produkt bauen, früh an echten Kunden testen — bevor du perfektionierst.',
+    methods: [
+      { icon: '🔍', title: 'Problem validieren', summary: 'Rede mit 10-20 potenziellen Kunden, bevor du irgendetwas baust.' },
+      { icon: '🧪', title: 'MVP bauen', summary: 'Die kleinste Version, die den Kernnutzen liefert — schnell live.' },
+      { icon: '🤝', title: 'Erste Kunden & Feedback', summary: 'Nutzer > Features. Verkaufe früh, lerne aus echten Reaktionen.' },
+      { icon: '📊', title: 'Markt & Wettbewerb', summary: 'Verstehe Marktgröße, Sättigung und deine Nische/Differenzierung.' },
+      { icon: '📣', title: 'Reichweite/Marketing', summary: 'Ein Kanal, konsequent bespielt, schlägt fünf halbherzige.' },
+    ],
+    blockerHelp: 'Gegen dein Hindernis: (1) zerlege es in den allerkleinsten nächsten Schritt, (2) setz dir eine Deadline mit Konsequenz, (3) hol dir einen Accountability-Partner.',
+  },
+  learning: {
+    intro: 'Am schnellsten lernst du mit Active Recall + Spaced Repetition + Altklausuren — nicht mit passivem Lesen/Markieren.',
+    methods: [
+      { icon: '🧠', title: 'Active Recall', summary: 'Abfragen statt wiederlesen — der stärkste Lerneffekt überhaupt.' },
+      { icon: '🔁', title: 'Spaced Repetition', summary: 'Wiederholung in wachsenden Abständen verankert Wissen langfristig.' },
+      { icon: '📝', title: 'Altklausuren üben', summary: 'Unter echten Bedingungen üben deckt Lücken gezielt auf.' },
+      { icon: '🗓️', title: 'Lernplan', summary: 'Feste Blöcke pro Fach, rückwärts vom Prüfungstermin geplant.' },
+      { icon: '📵', title: 'Ablenkungen eliminieren', summary: 'Handy weg = doppelte effektive Lernzeit.' },
+    ],
+    blockerHelp: 'Gegen dein Hindernis: (1) Handy in anderen Raum, (2) starte mit nur 10 Min, (3) nutze feste Lernorte/-zeiten.',
+  },
+  health: {
+    intro: 'Mehr Energie kommt aus Schlaf-Rhythmus, Tageslicht/Bewegung und weniger Reizüberflutung. Klein anfangen, konsequent bleiben.',
+    methods: [
+      { icon: '😴', title: 'Schlaf-Rhythmus fixen', summary: 'Feste Aufsteh-Zeit ist der Hebel Nr. 1 für Energie.' },
+      { icon: '☀️', title: 'Licht & Bewegung', summary: 'Morgens Tageslicht + Bewegung stabilisiert deinen Rhythmus.' },
+      { icon: '🧘', title: 'Stress runter', summary: 'Kurze Atem-/Pausenrituale senken die Dauerbelastung.' },
+      { icon: '📵', title: 'Reizfasten', summary: 'Weniger Doomscrolling = mehr mentale Energie.' },
+    ],
+    blockerHelp: 'Gegen dein Hindernis: (1) eine Gewohnheit zur Zeit, (2) koppel sie an bestehende Routinen, (3) mach sie lächerlich klein.',
+  },
+  general: {
+    intro: 'Zerlege dein Ziel in den größten Hebel, bau ein tägliches System darum und miss deinen Fortschritt.',
+    methods: [
+      { icon: '🎯', title: 'Ziel zerlegen', summary: 'Vom großen Ziel rückwärts zu konkreten Wochen-/Tageszielen.' },
+      { icon: '⚙️', title: 'Tägliches System', summary: 'Gewohnheiten schlagen Motivation — bau die Routine.' },
+      { icon: '🔑', title: 'Größten Hebel finden', summary: 'Die 20 % Aktionen, die 80 % des Ergebnisses bringen.' },
+      { icon: '📵', title: 'Ablenkungen eliminieren', summary: 'Entferne die Reibung, die dich vom Ziel abhält.' },
+      { icon: '📈', title: 'Fortschritt messen', summary: 'Was du misst, verbesserst du.' },
+    ],
+    blockerHelp: 'Gegen dein Hindernis: (1) kleinster nächster Schritt, (2) feste Zeit im Kalender, (3) Accountability.',
+  },
+};
+function localMethods(p) {
+  const t = METHOD_TEMPLATES[goalDomain(p.goal)];
+  return { intro: t.intro, methods: t.methods.map(m => ({ ...m })), blockerHelp: t.blockerHelp };
+}
+function localApproach(p) {
+  return {
+    steps: [
+      { title: 'Startpunkt klären', detail: 'Beschreibe kurz, wo du bei „' + p.method + '" gerade stehst.' },
+      { title: 'Kleinsten Schritt festlegen', detail: 'Wähle die eine Aktion, die du in den nächsten 24 h umsetzen kannst.' },
+      { title: 'Fest einplanen', detail: 'Trage einen festen Zeitpunkt ein und mach ihn unverhandelbar.' },
+      { title: 'Messen & anpassen', detail: 'Prüfe wöchentlich, was wirkt, und justiere.' },
+    ],
+    firstQuestions: ['Wo stehst du bei „' + p.method + '" aktuell?', 'Was hält dich hier am meisten auf?'],
+  };
+}
+function localChat() { return { text: 'Ich bin gerade im **Offline-Modus** (regelbasiert). Für echtes, individuelles Coaching schalte bitte die Live-KI frei (API-Key + Vercel). Trotzdem: nenn mir konkret, wo du stehst — ich gebe dir den nächsten sinnvollen Schritt.' }; }
+function localFormcheck() { return { text: 'Die Bild-Analyse (z. B. Form-Check oder Mahlzeiten-Foto) braucht die **Live-KI** (Claude Vision). Sobald der API-Key + Vercel stehen, analysiere ich dein Foto direkt hier.' }; }
 
 function localPlan(p) {
   const base = clamp(p.baselineMinutes || 25, 10, 90);
   const cap = p.battery < 35 ? Math.round(base * 0.6) : base;
   const raw = (p.tasks || '').split(/\n|,|;|\bund\b|\+/i).map(s => s.trim()).filter(Boolean);
   const tasks = raw.length ? raw : ['Wichtigste Aufgabe'];
-  const guessType = t => /lern|lesen|study|kapitel|vokab/i.test(t) ? 'learning'
-    : /schreib|design|idee|konzept|kreativ/i.test(t) ? 'creative'
-    : /mail|admin|orga|aufräum|planen/i.test(t) ? 'admin' : 'deep';
-  const blocks = [];
-  tasks.slice(0, 4).forEach((t, i) => {
-    blocks.push({
-      title: t.charAt(0).toUpperCase() + t.slice(1),
-      minutes: clamp(cap - (i > 1 ? 5 : 0), 10, 90),
-      type: guessType(t),
-      why: i === 0 ? 'Wichtigstes zuerst, solange die Energie hoch ist' : 'Fokusblock in Kapazitätsgröße',
-    });
-  });
-  const note = p.battery < 35
-    ? 'Deine Brain-Battery ist niedrig — wir gehen heute mit kürzeren Blöcken vor. Qualität vor Quantität.'
-    : `Klarer Plan steht. Starte mit dem ersten Block und lock dich rein — ${cap} Minuten, kein Handy.`;
+  const guessType = t => /lern|lesen|study|kapitel|vokab/i.test(t) ? 'learning' : /schreib|design|idee|konzept|kreativ/i.test(t) ? 'creative' : /mail|admin|orga|aufräum|planen/i.test(t) ? 'admin' : 'deep';
+  const blocks = tasks.slice(0, 4).map((t, i) => ({ title: t.charAt(0).toUpperCase() + t.slice(1), minutes: clamp(cap - (i > 1 ? 5 : 0), 10, 90), type: guessType(t), why: i === 0 ? 'Wichtigstes zuerst, solange die Energie hoch ist' : 'Fokusblock in Kapazitätsgröße' }));
+  const note = p.battery < 35 ? 'Deine Brain-Battery ist niedrig — kürzere Blöcke, Qualität vor Quantität.' : `Klarer Plan steht. Starte mit Block 1 und lock dich rein — ${cap} Min, kein Handy.`;
   return { coachNote: note, blocks };
 }
-
 function localDebrief(p) {
   const ratio = p.planned ? p.actual / p.planned : 1;
   const dcount = (p.distractions || []).length;
   let insight, adjustment;
-  if (dcount >= 3) {
-    insight = `Du wurdest ${dcount}× rausgezogen — vor allem durch ${p.topDistraction || 'Ablenkungen'}. Dein Fokus bricht in Wellen.`;
-    adjustment = `Entferne morgen den Auslöser vorab (z. B. Handy in anderen Raum) und mach 5 Min kürzere Blöcke.`;
-  } else if (ratio < 0.7) {
-    insight = 'Du hast den Block früher beendet — die geplante Länge war für heute etwas zu lang.';
-    adjustment = 'Plane morgen Blöcke ~20% kürzer und häng bei Bedarf einen zweiten dran.';
-  } else if (p.rating >= 4) {
-    insight = 'Starke Session — du warst richtig drin und bist drangeblieben.';
-    adjustment = 'Behalte die Blocklänge bei und versuch morgen einen Block mehr.';
-  } else {
-    insight = 'Solide Session mit Luft nach oben.';
-    adjustment = 'Setz dir vor dem nächsten Block eine glasklare Mini-Intention (1 Satz).';
-  }
-  return { insight, adjustment, encouragement: 'Fokus ist ein Muskel — du hast ihn heute trainiert. 💪' };
+  if (dcount >= 3) { insight = `Du wurdest ${dcount}× rausgezogen — vor allem durch ${p.topDistraction || 'Ablenkungen'}.`; adjustment = 'Entferne morgen den Auslöser vorab und mach 5 Min kürzere Blöcke.'; }
+  else if (ratio < 0.7) { insight = 'Du hast früher beendet — die Länge war heute etwas zu lang.'; adjustment = 'Plane morgen ~20% kürzere Blöcke.'; }
+  else if (p.rating >= 4) { insight = 'Starke Session — du warst richtig drin.'; adjustment = 'Blocklänge beibehalten, morgen einen Block mehr.'; }
+  else { insight = 'Solide Session mit Luft nach oben.'; adjustment = 'Setz dir vor dem Block eine glasklare Mini-Intention.'; }
+  return { insight, adjustment, encouragement: 'Fokus ist ein Muskel — heute trainiert. 💪' };
 }
 
-/* ============================ Brain Battery Modell ============================ */
-// Kein Wearable: geschätzt aus Schlaf, geleisteter Deep-Work-Zeit und Erholung.
+/* ============================ Brain Battery ============================ */
 function computeBatteryStart(sleepQuality, prevEnd) {
-  const sleep = sleepQuality ? sleepQuality / 5 : 0.7;      // 0..1
-  const carry = prevEnd != null ? prevEnd : 80;             // Rest von gestern
+  const sleep = sleepQuality ? sleepQuality / 5 : 0.7;
+  const carry = prevEnd != null ? prevEnd : 80;
   return clamp(Math.round(40 + sleep * 50 + carry * 0.12), 20, 100);
 }
 const batteryColor = b => b > 60 ? '#34d399' : b > 35 ? '#fbbf24' : '#f87171';
 const batteryLabel = b => b > 60 ? 'Voll fokusfähig' : b > 35 ? 'Achte auf Pausen' : 'Burnout-Zone — bald stoppen';
 
+/* ============================ Mini Markdown (fett) ============================ */
+function mdInline(s) {
+  const parts = String(s).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => p.startsWith('**') && p.endsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>);
+}
+function ChatText({ text }) {
+  return <div className="prose-chat text-sm leading-relaxed">{String(text).split(/\n{2,}/).map((para, i) => <p key={i}>{para.split('\n').map((line, j) => <React.Fragment key={j}>{j > 0 && <br />}{mdInline(line)}</React.Fragment>)}</p>)}</div>;
+}
+
 /* ============================ Root App ============================ */
 function App() {
   const [profile, setProfile] = useState(() => LS.get('drw_profile', null));
+  const [coach, setCoach] = useState(() => LS.get('drw_coach', null));
+  const [assistant, setAssistant] = useState(() => LS.get('drw_assistant', []));
   const [state, setState] = useState(() => freshOrLoad());
-  const [screen, setScreen] = useState('home'); // home | session | debrief | insights
+  const [view, setView] = useState('dashboard');     // dashboard | method | focus | insights | assistant(mobile)
+  const [activeMethodId, setActiveMethodId] = useState(null);
+  const [overlay, setOverlay] = useState(null);       // session | debrief
   const [activeBlock, setActiveBlock] = useState(null);
   const [lastSession, setLastSession] = useState(null);
 
   useEffect(() => LS.set('drw_profile', profile), [profile]);
+  useEffect(() => LS.set('drw_coach', coach), [coach]);
+  useEffect(() => LS.set('drw_assistant', assistant), [assistant]);
   useEffect(() => LS.set('drw_state', state), [state]);
+  useEffect(() => { if (profile && (!coach || !coach.methods)) generateMethods(profile); }, []);
 
   function freshOrLoad() {
-    const s = LS.get('drw_state', null);
-    const t = todayStr();
-    if (!s) {
-      return { day: t, battery: 80, sleepQuality: null, blocks: [], streak: 0, lastActiveDay: null, history: [] };
-    }
+    const s = LS.get('drw_state', null); const t = todayStr();
+    if (!s) return { day: t, battery: 80, sleepQuality: null, blocks: [], streak: 0, lastActiveDay: null, history: [] };
     if (s.day !== t) {
-      // neuer Tag -> Verlauf abschließen, Battery neu
       const prevFocus = (s.blocks || []).filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0);
-      const prevRatings = (s.blocks || []).filter(b => b.focusRating).map(b => b.focusRating);
-      const avg = prevRatings.length ? prevRatings.reduce((a, c) => a + c, 0) / prevRatings.length : 0;
+      const ratings = (s.blocks || []).filter(b => b.focusRating).map(b => b.focusRating);
+      const avg = ratings.length ? ratings.reduce((a, c) => a + c, 0) / ratings.length : 0;
       const history = [...(s.history || []), { date: s.day, focusMinutes: prevFocus, avgRating: +avg.toFixed(1), distractions: (s.blocks || []).reduce((a, b) => a + (b.distractions ? b.distractions.length : 0), 0), batteryEnd: s.battery }].slice(-30);
       return { day: t, battery: computeBatteryStart(null, s.battery), sleepQuality: null, blocks: [], streak: s.streak || 0, lastActiveDay: s.lastActiveDay, history };
     }
     return s;
   }
 
-  if (!profile) return <Onboarding onDone={p => { setProfile(p); }} />;
+  if (!profile) return <Onboarding onDone={async p => { setProfile(p); await generateMethods(p); }} />;
+
+  async function generateMethods(p) {
+    setCoach(c => ({ ...(c || {}), loading: true }));
+    const res = await askCoach('methods', { goal: p.goal, stoerfaktor: p.stoerfaktor, hindernis: p.hindernis });
+    setCoach({ intro: res.intro || '', methods: (res.methods || []).map(m => ({ ...m, id: uid() })), blockerHelp: res.blockerHelp || '', approaches: {}, threads: {}, captures: {}, source: res.source, loading: false });
+  }
 
   const patch = up => setState(s => ({ ...s, ...up }));
-
-  const startBlock = b => { setActiveBlock(b); setScreen('session'); };
-
+  const startBlock = b => { setActiveBlock(b); setOverlay('session'); };
   const finishBlock = (block, result) => {
-    // result: { actual, rating, distractions }
     setState(s => {
       const blocks = s.blocks.map(b => b.id === block.id ? { ...b, status: 'done', actual: result.actual, focusRating: result.rating, distractions: result.distractions } : b);
-      const batteryDrain = clamp(Math.round(result.actual / 3) + result.distractions.length * 2, 4, 40);
-      const battery = clamp(s.battery - batteryDrain, 0, 100);
+      const drain = clamp(Math.round(result.actual / 3) + result.distractions.length * 2, 4, 40);
+      const battery = clamp(s.battery - drain, 0, 100);
       const doneToday = blocks.filter(b => b.status === 'done').length;
-      const newStreak = s.lastActiveDay === todayStr() ? s.streak : (doneToday >= 1 ? (s.streak || 0) + 1 : s.streak);
-      return { ...s, blocks, battery, streak: newStreak, lastActiveDay: todayStr() };
+      const streak = s.lastActiveDay === todayStr() ? s.streak : (doneToday >= 1 ? (s.streak || 0) + 1 : s.streak);
+      return { ...s, blocks, battery, streak, lastActiveDay: todayStr() };
     });
-    setLastSession({ block, result });
-    setScreen('debrief');
+    setLastSession({ block, result }); setOverlay('debrief');
   };
-
   const skipBlock = block => setState(s => ({ ...s, blocks: s.blocks.map(b => b.id === block.id ? { ...b, status: 'skipped' } : b) }));
 
-  const recharge = amt => patch({ battery: clamp(state.battery + amt, 0, 100) });
+  const activeMethod = coach && coach.methods ? coach.methods.find(m => m.id === activeMethodId) : null;
+
+  // Overlays (Vollbild)
+  if (overlay === 'session' && activeBlock) return <Session block={activeBlock} battery={state.battery} profile={profile} onFinish={finishBlock} onRecharge={a => patch({ battery: clamp(state.battery + a, 0, 100) })} onExit={() => setOverlay(null)} />;
+  if (overlay === 'debrief' && lastSession) return <Debrief session={lastSession} profile={profile} state={state} onDone={() => setOverlay(null)} />;
+
+  const nav = (v) => { setView(v); };
 
   return (
-    <div className="min-h-screen ambient">
-      {screen === 'home' && (
-        <Home profile={profile} state={state} patch={patch}
-          onStart={startBlock} onSkip={skipBlock}
-          onInsights={() => setScreen('insights')}
-          onResetProfile={() => { setProfile(null); LS.set('drw_profile', null); }} />
-      )}
-      {screen === 'session' && activeBlock && (
-        <Session block={activeBlock} battery={state.battery} profile={profile}
-          onFinish={finishBlock} onRecharge={recharge} onExit={() => setScreen('home')} />
-      )}
-      {screen === 'debrief' && lastSession && (
-        <Debrief session={lastSession} profile={profile} state={state}
-          onDone={() => setScreen('home')} />
-      )}
-      {screen === 'insights' && (
-        <Insights state={state} onBack={() => setScreen('home')} />
-      )}
+    <div className="min-h-screen ambient lg:flex">
+      {/* Sidebar (Desktop) */}
+      <aside className="hidden lg:flex lg:flex-col w-[340px] shrink-0 h-screen sticky top-0 border-r border-white/10 bg-black/30 backdrop-blur">
+        <Brand />
+        <NavLinks view={view} nav={nav} />
+        <div className="flex-1 min-h-0 border-t border-white/10">
+          <Assistant profile={profile} coach={coach} state={state} messages={assistant} setMessages={setAssistant} />
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 min-w-0 pb-24 lg:pb-8">
+        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
+        {view === 'method' && activeMethod && <MethodDetail method={activeMethod} profile={profile} coach={coach} setCoach={setCoach} onBack={() => setView('dashboard')} />}
+        {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} />}
+        {view === 'insights' && <Insights state={state} />}
+        {view === 'assistant' && <div className="lg:hidden h-[calc(100vh-6rem)]"><Assistant profile={profile} coach={coach} state={state} messages={assistant} setMessages={setAssistant} /></div>}
+      </main>
+
+      {/* Bottom Nav (Mobile) */}
+      <BottomNav view={view} nav={nav} />
     </div>
+  );
+}
+
+/* ============================ Brand & Nav ============================ */
+function Brand() {
+  return (
+    <div className="p-5 flex items-center gap-2">
+      <div className="w-9 h-9 rounded-xl btn-primary grid place-items-center text-lg">🔒</div>
+      <div><div className="font-extrabold leading-none">Do<span className="grad-text">Real</span>Work</div><div className="text-[10px] text-zinc-500 uppercase tracking-widest">Dein Ziel-Coach</div></div>
+    </div>
+  );
+}
+const NAV = [{ id: 'dashboard', icon: '🎯', label: 'Ziel & Methoden' }, { id: 'focus', icon: '🔒', label: 'Fokus' }, { id: 'insights', icon: '📈', label: 'Fortschritt' }];
+function NavLinks({ view, nav }) {
+  return (
+    <nav className="px-3 space-y-1">
+      {NAV.map(n => (
+        <button key={n.id} onClick={() => nav(n.id)} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ' + ((view === n.id || (n.id === 'dashboard' && view === 'method')) ? 'bg-white/10 text-white font-semibold' : 'text-zinc-400 hover:bg-white/5')}>
+          <span>{n.icon}</span>{n.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+function BottomNav({ view, nav }) {
+  const items = [...NAV, { id: 'assistant', icon: '💬', label: 'Coach' }];
+  return (
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-black/70 backdrop-blur border-t border-white/10 flex">
+      {items.map(n => (
+        <button key={n.id} onClick={() => nav(n.id)} className={'flex-1 py-3 flex flex-col items-center gap-0.5 text-[10px] ' + ((view === n.id || (n.id === 'dashboard' && view === 'method')) ? 'text-violet-300' : 'text-zinc-500')}>
+          <span className="text-lg">{n.icon}</span>{n.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
 /* ============================ Onboarding ============================ */
 function Onboarding({ onDone }) {
   const [step, setStep] = useState(0);
+  const [stoerfaktor, setStoer] = useState('');
   const [goal, setGoal] = useState('');
-  const [chronotype, setChronotype] = useState('Morgen');
-  const [distraction, setDistraction] = useState('');
+  const [hindernis, setHindernis] = useState('');
+  const [chronotype, setChrono] = useState('Morgen');
   const [baselineMinutes, setBaseline] = useState(25);
 
   const steps = [
-    {
-      title: 'Willkommen bei DoRealWork', emoji: '🔒',
-      sub: 'Kein Tracker. Ein Coach, der deinen Fokus trainiert — und dich stoppt, bevor du ausbrennst.',
-      body: <p className="text-zinc-400 text-sm leading-relaxed">In 30 Sekunden lernt dein Coach dich kennen. Danach bekommst du jeden Tag einen Plan, der zu <span className="text-zinc-200">deiner</span> Energie passt.</p>,
-      next: 'Los geht\'s',
-      valid: true,
-    },
-    {
-      title: 'Worauf lockst du dich?', emoji: '🎯',
-      sub: 'Dein großes Ziel gerade — je konkreter, desto besser der Plan.',
-      body: <input autoFocus value={goal} onChange={e => setGoal(e.target.value)} placeholder="z. B. Abi-Prüfungen bestehen / mein Startup bauen"
-        className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60" />,
-      valid: goal.trim().length > 1,
-    },
-    {
-      title: 'Wann ist deine Energie am höchsten?', emoji: '⚡',
-      sub: 'Dann legen wir deinen härtesten Block hin.',
-      body: <div className="grid grid-cols-2 gap-3">
-        {['Morgen', 'Mittag', 'Nachmittag', 'Abend'].map(o => (
-          <button key={o} onClick={() => setChronotype(o)}
-            className={'rounded-xl px-4 py-3 border transition ' + (chronotype === o ? 'btn-primary border-transparent text-white' : 'bg-white/5 border-white/10 hover:border-white/25')}>{o}</button>
-        ))}
-      </div>,
-      valid: true,
-    },
-    {
-      title: 'Was zieht dich am meisten raus?', emoji: '📵',
-      sub: 'Deinen größten Fokus-Leak greifen wir gezielt an.',
-      body: <div className="grid grid-cols-2 gap-3">
-        {['Handy / Social Media', 'YouTube / Streaming', 'Gedankenkreisen', 'Andere Menschen', 'Snacken / Aufstehen', 'Multitasking'].map(o => (
-          <button key={o} onClick={() => setDistraction(o)}
-            className={'rounded-xl px-3 py-3 text-sm border transition ' + (distraction === o ? 'btn-primary border-transparent text-white' : 'bg-white/5 border-white/10 hover:border-white/25')}>{o}</button>
-        ))}
-      </div>,
-      valid: distraction.length > 0,
-    },
-    {
-      title: 'Wie lange kannst du aktuell am Stück fokussieren?', emoji: '⏳',
-      sub: 'Ehrlich sein — wir bauen es von hier aus aus.',
-      body: <div>
-        <div className="text-center text-5xl font-black grad-text mb-4">{baselineMinutes}<span className="text-2xl text-zinc-500 font-bold"> Min</span></div>
-        <input type="range" min="10" max="90" step="5" value={baselineMinutes} onChange={e => setBaseline(+e.target.value)} className="w-full accent-violet-500" />
-        <div className="flex justify-between text-xs text-zinc-500 mt-1"><span>10</span><span>90</span></div>
-      </div>,
-      valid: true,
-    },
+    { emoji: '🔒', title: 'Willkommen bei DoRealWork', sub: 'Sag mir dein Ziel — ich zeige dir die schnellsten Wege dorthin und coache dich in jeder Disziplin.', body: <p className="text-zinc-400 text-sm">In unter einer Minute kennt dich dein Coach. Danach bekommst du Methoden, Schritt-für-Schritt-Coaching und einen KI-Assistenten, der immer für dich da ist.</p>, valid: true, next: "Los geht's" },
+    { emoji: '📵', title: 'Was stört dich am meisten?', sub: 'Dein größter Störfaktor bei der Arbeit — den greifen wir gezielt an.', body: <input autoFocus value={stoerfaktor} onChange={e => setStoer(e.target.value)} placeholder="z. B. Ich spiele zu viel am Handy" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60" />, valid: stoerfaktor.trim().length > 1 },
+    { emoji: '🎯', title: 'Was ist dein Ziel?', sub: 'Je konkreter, desto besser die Methoden.', body: <input autoFocus value={goal} onChange={e => setGoal(e.target.value)} placeholder="z. B. Einen besseren Körper / Ein Startup gründen" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60" />, valid: goal.trim().length > 1 },
+    { emoji: '🧱', title: 'Was hindert dich, dein Ziel zu erreichen?', sub: 'Ich gebe dir gleich konkrete Wege, das zu lösen.', body: <input autoFocus value={hindernis} onChange={e => setHindernis(e.target.value)} placeholder="z. B. Keine Zeit / weiß nicht wo anfangen / keine Motivation" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60" />, valid: hindernis.trim().length > 1 },
+    { emoji: '⚡', title: 'Wann ist deine Energie am höchsten?', sub: 'Dann legen wir deine härtesten Aufgaben hin.', body: <div className="grid grid-cols-2 gap-3">{['Morgen', 'Mittag', 'Nachmittag', 'Abend'].map(o => <button key={o} onClick={() => setChrono(o)} className={'rounded-xl px-4 py-3 border transition ' + (chronotype === o ? 'btn-primary border-transparent text-white' : 'bg-white/5 border-white/10 hover:border-white/25')}>{o}</button>)}</div>, valid: true },
+    { emoji: '⏳', title: 'Wie lange kannst du aktuell am Stück fokussieren?', sub: 'Ehrlich — wir bauen es von hier aus aus.', body: <div><div className="text-center text-5xl font-black grad-text mb-4">{baselineMinutes}<span className="text-2xl text-zinc-500 font-bold"> Min</span></div><input type="range" min="10" max="90" step="5" value={baselineMinutes} onChange={e => setBaseline(+e.target.value)} className="w-full accent-violet-500" /></div>, valid: true },
   ];
-
-  const cur = steps[step];
-  const last = step === steps.length - 1;
-
+  const cur = steps[step]; const last = step === steps.length - 1;
   return (
-    <div className="min-h-screen flex items-center justify-center p-5">
+    <div className="min-h-screen ambient flex items-center justify-center p-5">
       <div className="w-full max-w-md glass rounded-3xl p-7 animate-fadeUp">
-        <div className="flex gap-1.5 mb-6">
-          {steps.map((_, i) => <div key={i} className={'h-1 flex-1 rounded-full ' + (i <= step ? 'bg-violet-500' : 'bg-white/10')} />)}
-        </div>
+        <div className="flex gap-1.5 mb-6">{steps.map((_, i) => <div key={i} className={'h-1 flex-1 rounded-full ' + (i <= step ? 'bg-violet-500' : 'bg-white/10')} />)}</div>
         <div className="text-4xl mb-3">{cur.emoji}</div>
         <h1 className="text-2xl font-extrabold mb-1">{cur.title}</h1>
         <p className="text-zinc-400 text-sm mb-5">{cur.sub}</p>
         <div className="mb-6">{cur.body}</div>
         <div className="flex gap-3">
           {step > 0 && <button onClick={() => setStep(step - 1)} className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 text-sm">Zurück</button>}
-          <button disabled={!cur.valid}
-            onClick={() => last ? onDone({ goal, chronotype, distraction, baselineMinutes, onboarded: true }) : setStep(step + 1)}
-            className={'flex-1 px-4 py-3 rounded-xl font-semibold text-white transition ' + (cur.valid ? 'btn-primary' : 'bg-white/5 text-zinc-500 cursor-not-allowed')}>
-            {last ? 'Coach aktivieren →' : (cur.next || 'Weiter')}
-          </button>
+          <button disabled={!cur.valid} onClick={() => last ? onDone({ stoerfaktor, goal, hindernis, chronotype, baselineMinutes, onboarded: true }) : setStep(step + 1)} className={'flex-1 px-4 py-3 rounded-xl font-semibold text-white transition ' + (cur.valid ? 'btn-primary' : 'bg-white/5 text-zinc-500 cursor-not-allowed')}>{last ? 'Coach aktivieren →' : (cur.next || 'Weiter')}</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ============================ Home / Today ============================ */
-function Home({ profile, state, patch, onStart, onSkip, onInsights, onResetProfile }) {
+/* ============================ Dashboard ============================ */
+function Dashboard({ profile, coach, state, onOpenMethod, onRegenerate, onReset, nav }) {
+  const loading = !coach || coach.loading;
+  return (
+    <div className="max-w-3xl mx-auto px-5 pt-8">
+      <div className="flex items-center justify-between mb-6 lg:hidden"><Brand /><SourceBadge source={coach && coach.source} /></div>
+
+      <div className="glass rounded-3xl p-6 mb-6 animate-fadeUp">
+        <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-1">Dein Ziel</div>
+        <h1 className="text-2xl font-extrabold mb-2">{profile.goal}</h1>
+        {loading ? <div className="text-sm text-zinc-400 flex items-center gap-2"><Spinner /> Dein Coach entwickelt deine Methoden…</div> : coach.intro && <p className="text-zinc-300 text-sm leading-relaxed">{coach.intro}</p>}
+        <div className="hidden lg:block absolute" />
+      </div>
+
+      {!loading && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold">🚀 Deine schnellsten Wege zum Ziel</h2>
+            <button onClick={onRegenerate} className="text-xs text-zinc-400 hover:text-white flex items-center gap-1">↻ neu</button>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 mb-6">
+            {(coach.methods || []).map(m => (
+              <button key={m.id} onClick={() => onOpenMethod(m.id)} className="text-left glass rounded-2xl p-4 hover:border-violet-400/40 transition group animate-fadeUp">
+                <div className="flex items-center gap-3 mb-1"><span className="text-2xl">{m.icon}</span><span className="font-semibold group-hover:text-violet-200">{m.title}</span></div>
+                <p className="text-sm text-zinc-400">{m.summary}</p>
+                <div className="text-xs text-violet-300/80 mt-2 opacity-0 group-hover:opacity-100 transition">So gehst du's an →</div>
+              </button>
+            ))}
+          </div>
+
+          {coach.blockerHelp && (
+            <div className="glass rounded-2xl p-5 mb-6 border-l-2 border-l-emerald-400/70 animate-fadeUp">
+              <div className="flex items-center gap-2 text-xs text-emerald-300/80 font-semibold mb-1"><span>🧱 Dein Hindernis:</span><span className="text-zinc-400 font-normal">„{profile.hindernis}"</span></div>
+              <ChatText text={coach.blockerHelp} />
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3 mb-8">
+            <button onClick={() => nav('focus')} className="glass rounded-2xl p-4 text-left hover:border-white/25"><div className="text-xl mb-1">🔒</div><div className="font-semibold">Jetzt fokussieren</div><div className="text-xs text-zinc-400">Plane deinen Tag & starte eine Lock-in-Session.</div></button>
+            <button onClick={() => nav('insights')} className="glass rounded-2xl p-4 text-left hover:border-white/25"><div className="text-xl mb-1">📈</div><div className="font-semibold">Fortschritt</div><div className="text-xs text-zinc-400">Streak, Fokus-Minuten & deine Muster.</div></button>
+          </div>
+
+          <button onClick={onReset} className="block mx-auto text-xs text-zinc-600 hover:text-zinc-400 mb-4">Alles zurücksetzen</button>
+        </>
+      )}
+    </div>
+  );
+}
+function SourceBadge({ source }) {
+  if (source !== 'local') return null;
+  return <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-500">Offline-KI</span>;
+}
+function Spinner() { return <span className="inline-block w-4 h-4 border-2 border-white/20 border-t-violet-400 rounded-full animate-spinSlow" />; }
+
+/* ============================ Method Detail (Coaching) ============================ */
+function MethodDetail({ method, profile, coach, setCoach, onBack }) {
+  const approach = (coach.approaches || {})[method.id];
+  const thread = (coach.threads || {})[method.id] || [];
+  const captures = (coach.captures || {})[method.id] || [];
+  const [loadingApproach, setLoadingApproach] = useState(false);
+
+  useEffect(() => {
+    if (!approach && !loadingApproach) {
+      setLoadingApproach(true);
+      askCoach('approach', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method.title }).then(res => {
+        setCoach(c => ({ ...c, approaches: { ...(c.approaches || {}), [method.id]: { steps: res.steps || [], firstQuestions: res.firstQuestions || [], source: res.source } } }));
+        setLoadingApproach(false);
+      });
+    }
+  }, [method.id]);
+
+  const setThread = updater => setCoach(c => ({ ...c, threads: { ...(c.threads || {}), [method.id]: typeof updater === 'function' ? updater((c.threads || {})[method.id] || []) : updater } }));
+  const setCaptures = updater => setCoach(c => ({ ...c, captures: { ...(c.captures || {}), [method.id]: typeof updater === 'function' ? updater((c.captures || {})[method.id] || []) : updater } }));
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 pt-8">
+      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white mb-4">← Zurück zu den Methoden</button>
+      <div className="flex items-center gap-3 mb-1"><span className="text-3xl">{method.icon}</span><h1 className="text-2xl font-extrabold">{method.title}</h1></div>
+      <p className="text-zinc-400 text-sm mb-6">{method.summary}</p>
+
+      {/* Herangehensweise */}
+      <div className="glass rounded-2xl p-5 mb-6">
+        <h2 className="font-bold mb-3">🧭 So gehst du es am besten an</h2>
+        {loadingApproach || !approach ? <div className="text-sm text-zinc-400 flex items-center gap-2"><Spinner /> Coach erstellt deinen Fahrplan…</div> : (
+          <ol className="space-y-3">
+            {(approach.steps || []).map((s, i) => (
+              <li key={i} className="flex gap-3"><div className="w-6 h-6 rounded-full btn-primary grid place-items-center text-xs font-bold shrink-0">{i + 1}</div><div><div className="font-semibold text-sm">{s.title}</div><div className="text-sm text-zinc-400">{s.detail}</div></div></li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {/* Kamera / Foto-Analyse */}
+      <CameraCoach method={method} profile={profile} captures={captures} setCaptures={setCaptures} />
+
+      {/* Coaching-Chat zu dieser Methode */}
+      <div className="glass rounded-2xl p-5 mb-6">
+        <h2 className="font-bold mb-1">💬 Coaching zu „{method.title}"</h2>
+        <p className="text-xs text-zinc-500 mb-3">Beantworte die Fragen des Coaches oder frag alles zu dieser Methode.</p>
+        <ThreadChat profile={profile} method={method} messages={thread} setMessages={setThread} suggestions={approach && approach.firstQuestions} />
+      </div>
+    </div>
+  );
+}
+
+function CameraCoach({ method, profile, captures, setCaptures }) {
+  const inputRef = useRef();
+  const [busy, setBusy] = useState(false);
+  const isFitness = goalDomain(profile.goal) === 'fitness';
+
+  async function onFile(e) {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+    const m = /^data:(.+?);base64,(.*)$/.exec(dataUrl); if (!m) return;
+    setBusy(true);
+    const res = await askCoach('formcheck', { goal: profile.goal, method: method.title, note: isFitness ? 'Übungs-Ausführung prüfen (Form-Check)' : 'Foto zum Ziel analysieren', imageBase64: m[2], mediaType: m[1] });
+    setCaptures(prev => [{ img: dataUrl, feedback: res.text || '', ts: Date.now(), source: res.source }, ...prev]);
+    setBusy(false); e.target.value = '';
+  }
+
+  return (
+    <div className="glass rounded-2xl p-5 mb-6">
+      <h2 className="font-bold mb-1">📸 {isFitness ? 'Form-Check per Kamera' : 'Foto-Analyse'}</h2>
+      <p className="text-xs text-zinc-500 mb-3">{isFitness ? 'Nimm ein Foto deiner Übungs-Position auf — der Coach sagt dir, was du besser machen kannst.' : 'Lade ein Foto hoch (z. B. deine Mahlzeit) — der Coach analysiert es.'}</p>
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
+      <button onClick={() => inputRef.current && inputRef.current.click()} disabled={busy} className={'w-full py-3 rounded-xl font-semibold text-white ' + (busy ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>{busy ? <span className="flex items-center justify-center gap-2"><Spinner /> Analysiere…</span> : '📷 Foto aufnehmen / hochladen'}</button>
+      <div className="space-y-3 mt-4">
+        {captures.map((c, i) => (
+          <div key={i} className="flex gap-3 animate-fadeUp">
+            <img src={c.img} alt="" className="w-20 h-20 rounded-xl object-cover border border-white/10" />
+            <div className="flex-1 min-w-0"><ChatText text={c.feedback} />{c.source === 'local' && <div className="text-[10px] text-zinc-500 mt-1">Offline — Live-KI für echte Bild-Analyse nötig</div>}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================ Chat components ============================ */
+function ThreadChat({ profile, method, messages, setMessages, suggestions }) {
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef();
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, busy]);
+
+  async function send(text) {
+    const msg = (text != null ? text : input).trim(); if (!msg || busy) return;
+    const next = [...messages, { role: 'user', content: msg }];
+    setMessages(next); setInput(''); setBusy(true);
+    const res = await askCoach('chat', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method ? method.title : null, messages: next });
+    setMessages(m => [...m, { role: 'assistant', content: res.text || '(keine Antwort)', source: res.source }]);
+    setBusy(false);
+  }
+
+  return (
+    <div>
+      <div ref={scrollRef} className="chat-scroll max-h-72 overflow-y-auto space-y-3 mb-3">
+        {messages.length === 0 && suggestions && suggestions.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs text-zinc-500">Der Coach fragt:</div>
+            {suggestions.map((q, i) => <button key={i} onClick={() => send(q === true ? '' : q)} className="block w-full text-left text-sm glass rounded-xl px-3 py-2 hover:border-violet-400/40 text-zinc-200">{q}</button>)}
+          </div>
+        )}
+        {messages.map((m, i) => <Bubble key={i} m={m} />)}
+        {busy && <div className="text-zinc-500 text-sm flex items-center gap-2"><Spinner /> Coach denkt nach…</div>}
+      </div>
+      <ChatInput input={input} setInput={setInput} onSend={() => send()} busy={busy} />
+    </div>
+  );
+}
+
+function Assistant({ profile, coach, state, messages, setMessages }) {
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef();
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, busy]);
+
+  const focusSummary = state ? `${state.blocks.filter(b => b.status === 'done').length} Blöcke erledigt, Battery ${state.battery}, Streak ${state.streak}` : '';
+  const quick = ['Was ist mein nächster Schritt?', 'Ich hab grad wenig Zeit — was jetzt?', `Wie komme ich schneller zu: ${profile.goal}?`];
+
+  async function send(text) {
+    const msg = (text != null ? text : input).trim(); if (!msg || busy) return;
+    const next = [...messages, { role: 'user', content: msg }];
+    setMessages(next); setInput(''); setBusy(true);
+    const res = await askCoach('chat', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, focusSummary, messages: next });
+    setMessages(m => [...m, { role: 'assistant', content: res.text || '(keine Antwort)', source: res.source }]);
+    setBusy(false);
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-white/10">
+        <span className="text-lg">💬</span><div><div className="font-bold text-sm leading-none">KI-Coach</div><div className="text-[10px] text-zinc-500">immer für dich da</div></div>
+        {coach && coach.source === 'local' && <span className="ml-auto"><SourceBadge source="local" /></span>}
+      </div>
+      <div ref={scrollRef} className="chat-scroll flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="space-y-2">
+            <p className="text-sm text-zinc-400">Frag mich alles zu deinem Ziel — z. B. „Ich bin grad im Gym, was trainiere ich heute?"</p>
+            {quick.map((q, i) => <button key={i} onClick={() => send(q)} className="block w-full text-left text-sm glass rounded-xl px-3 py-2 hover:border-violet-400/40">{q}</button>)}
+          </div>
+        )}
+        {messages.map((m, i) => <Bubble key={i} m={m} />)}
+        {busy && <div className="text-zinc-500 text-sm flex items-center gap-2"><Spinner /> denkt nach…</div>}
+      </div>
+      <div className="p-3 border-t border-white/10"><ChatInput input={input} setInput={setInput} onSend={() => send()} busy={busy} /></div>
+    </div>
+  );
+}
+
+function Bubble({ m }) {
+  const user = m.role === 'user';
+  return (
+    <div className={user ? 'flex justify-end' : 'flex justify-start'}>
+      <div className={'max-w-[85%] rounded-2xl px-3.5 py-2.5 ' + (user ? 'btn-primary text-white' : 'glass')}>
+        {user ? <div className="text-sm whitespace-pre-wrap">{m.content}</div> : <ChatText text={m.content} />}
+      </div>
+    </div>
+  );
+}
+function ChatInput({ input, setInput, onSend, busy }) {
+  return (
+    <div className="flex gap-2">
+      <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') onSend(); }} placeholder="Nachricht…" className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm outline-none focus:border-violet-400/60" />
+      <button onClick={onSend} disabled={busy} className={'px-4 rounded-xl font-semibold text-white ' + (busy ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>↑</button>
+    </div>
+  );
+}
+
+/* ============================ Focus (Planner + Battery) ============================ */
+function Focus({ profile, state, patch, onStart, onSkip }) {
   const [tasks, setTasks] = useState('');
   const [loading, setLoading] = useState(false);
   const [coachNote, setCoachNote] = useState('');
   const [aiSource, setAiSource] = useState(null);
-
   const done = state.blocks.filter(b => b.status === 'done');
   const focusToday = done.reduce((a, b) => a + (b.actual || b.minutes), 0);
-
-  async function generate() {
-    if (!tasks.trim()) return;
-    setLoading(true);
-    const res = await askCoach('plan', {
-      goal: profile.goal, chronotype: profile.chronotype, distraction: profile.distraction,
-      baselineMinutes: profile.baselineMinutes, battery: state.battery, timeOfDay: timeOfDay(), tasks,
-    });
-    setCoachNote(res.coachNote || '');
-    setAiSource(res.source);
-    const blocks = (res.blocks || []).map(b => ({ ...b, id: uid(), status: 'todo', distractions: [] }));
-    patch({ blocks: [...state.blocks.filter(b => b.status !== 'todo'), ...blocks] });
-    setLoading(false);
-    setTasks('');
-  }
-
   const todo = state.blocks.filter(b => b.status === 'todo');
 
+  async function generate() {
+    if (!tasks.trim()) return; setLoading(true);
+    const res = await askCoach('plan', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, chronotype: profile.chronotype, baselineMinutes: profile.baselineMinutes, battery: state.battery, timeOfDay: timeOfDay(), tasks });
+    setCoachNote(res.coachNote || ''); setAiSource(res.source);
+    const blocks = (res.blocks || []).map(b => ({ ...b, id: uid(), status: 'todo', distractions: [] }));
+    patch({ blocks: [...state.blocks.filter(b => b.status !== 'todo'), ...blocks] });
+    setLoading(false); setTasks('');
+  }
+
   return (
-    <div className="max-w-2xl mx-auto px-5 pb-24 pt-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold">{timeOfDay()} · {profile.chronotype}-Typ</div>
-          <h1 className="text-2xl font-extrabold">Do <span className="grad-text">Real</span> Work</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Streak n={state.streak} />
-          <button onClick={onInsights} title="Fortschritt" className="w-10 h-10 rounded-xl glass grid place-items-center hover:border-white/25">📈</button>
-        </div>
-      </div>
-
-      {/* Brain Battery */}
-      <BrainBattery battery={state.battery} sleepQuality={state.sleepQuality}
-        onSleep={q => patch({ battery: computeBatteryStart(q, null), sleepQuality: q })} />
-
-      {/* Goal chip */}
-      <div className="glass rounded-2xl px-4 py-3 mt-4 flex items-center gap-3">
-        <span className="text-lg">🎯</span>
-        <div className="text-sm"><span className="text-zinc-400">Du lockst dich auf:</span> <span className="font-semibold">{profile.goal}</span></div>
-      </div>
-
-      {/* Planner */}
+    <div className="max-w-2xl mx-auto px-5 pt-8">
+      <div className="flex items-center justify-between mb-5"><div><div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold">{timeOfDay()} · {profile.chronotype}-Typ</div><h1 className="text-2xl font-extrabold">Fokus</h1></div><Streak n={state.streak} /></div>
+      <BrainBattery battery={state.battery} sleepQuality={state.sleepQuality} onSleep={q => patch({ battery: computeBatteryStart(q, null), sleepQuality: q })} />
       <div className="mt-5">
         <label className="text-sm font-semibold text-zinc-300">Was steht heute an?</label>
         <p className="text-xs text-zinc-500 mb-2">Wirf alles rein — der Coach baut daraus deine Fokus-Blöcke.</p>
-        <textarea value={tasks} onChange={e => setTasks(e.target.value)} rows={3}
-          placeholder="z. B. Mathe Kapitel 5 lernen, Essay schreiben, Mails beantworten"
-          className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60 resize-none" />
-        <button onClick={generate} disabled={loading || !tasks.trim()}
-          className={'w-full mt-2 py-3 rounded-2xl font-semibold text-white transition ' + (loading || !tasks.trim() ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>
-          {loading ? 'Coach denkt nach…' : '⚡ Meinen Tag planen'}
-        </button>
+        <textarea value={tasks} onChange={e => setTasks(e.target.value)} rows={3} placeholder="z. B. Mathe Kapitel 5 lernen, Essay schreiben, Mails" className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-violet-400/60 resize-none" />
+        <button onClick={generate} disabled={loading || !tasks.trim()} className={'w-full mt-2 py-3 rounded-2xl font-semibold text-white transition ' + (loading || !tasks.trim() ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>{loading ? 'Coach denkt nach…' : '⚡ Meinen Tag planen'}</button>
       </div>
-
-      {/* Coach note */}
-      {coachNote && (
-        <div className="glass rounded-2xl p-4 mt-4 animate-fadeUp border-l-2 border-l-violet-400/70">
-          <div className="flex items-center gap-2 text-xs text-violet-300/80 mb-1 font-semibold">
-            <span>🧠 Dein Coach</span>
-            {aiSource === 'local' && <span className="text-zinc-500 font-normal">(Offline-Modus)</span>}
-          </div>
-          <p className="text-sm text-zinc-200 leading-relaxed">{coachNote}</p>
-        </div>
-      )}
-
-      {/* Blocks */}
-      {todo.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-3">Heutige Fokus-Blöcke</h2>
-          <div className="space-y-3">
-            {todo.map(b => <BlockCard key={b.id} b={b} onStart={() => onStart(b)} onSkip={() => onSkip(b)} />)}
-          </div>
-        </div>
-      )}
-
-      {/* Done today */}
-      {done.length > 0 && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between text-sm text-zinc-400 mb-2">
-            <span>Heute geschafft</span><span className="font-semibold text-emerald-400">{focusToday} Fokus-Min</span>
-          </div>
-          <div className="space-y-2">
-            {done.map(b => (
-              <div key={b.id} className="flex items-center gap-3 text-sm glass rounded-xl px-4 py-2.5 opacity-80">
-                <span className="text-emerald-400">✓</span>
-                <span className="flex-1 line-through decoration-zinc-600">{b.title}</span>
-                <span className="text-zinc-500">{b.actual || b.minutes}′</span>
-                {b.focusRating && <span className="text-amber-300">{'★'.repeat(b.focusRating)}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {todo.length === 0 && done.length === 0 && (
-        <div className="text-center text-zinc-500 text-sm mt-10 animate-floaty">
-          <div className="text-4xl mb-2">🎯</div>
-          Plane deinen Tag, um deinen ersten Block zu starten.
-        </div>
-      )}
-
-      <button onClick={onResetProfile} className="block mx-auto mt-10 text-xs text-zinc-600 hover:text-zinc-400">Profil zurücksetzen</button>
+      {coachNote && <div className="glass rounded-2xl p-4 mt-4 border-l-2 border-l-violet-400/70 animate-fadeUp"><div className="flex items-center gap-2 text-xs text-violet-300/80 mb-1 font-semibold"><span>🧠 Dein Coach</span>{aiSource === 'local' && <span className="text-zinc-500 font-normal">(Offline)</span>}</div><p className="text-sm text-zinc-200">{coachNote}</p></div>}
+      {todo.length > 0 && <div className="mt-6"><h2 className="text-sm font-semibold text-zinc-300 mb-3">Heutige Fokus-Blöcke</h2><div className="space-y-3">{todo.map(b => <BlockCard key={b.id} b={b} onStart={() => onStart(b)} onSkip={() => onSkip(b)} />)}</div></div>}
+      {done.length > 0 && <div className="mt-6"><div className="flex items-center justify-between text-sm text-zinc-400 mb-2"><span>Heute geschafft</span><span className="font-semibold text-emerald-400">{focusToday} Fokus-Min</span></div><div className="space-y-2">{done.map(b => <div key={b.id} className="flex items-center gap-3 text-sm glass rounded-xl px-4 py-2.5 opacity-80"><span className="text-emerald-400">✓</span><span className="flex-1 line-through decoration-zinc-600">{b.title}</span><span className="text-zinc-500">{b.actual || b.minutes}′</span>{b.focusRating > 0 && <span className="text-amber-300">{'★'.repeat(b.focusRating)}</span>}</div>)}</div></div>}
+      {todo.length === 0 && done.length === 0 && <div className="text-center text-zinc-500 text-sm mt-10"><div className="text-4xl mb-2 animate-floaty">🎯</div>Plane deinen Tag, um deinen ersten Block zu starten.</div>}
     </div>
   );
 }
-
-const TYPE_META = {
-  deep: { icon: '🧠', label: 'Deep Work', ring: 'ring-violet-400/40' },
-  learning: { icon: '📚', label: 'Lernen', ring: 'ring-sky-400/40' },
-  creative: { icon: '✨', label: 'Kreativ', ring: 'ring-fuchsia-400/40' },
-  admin: { icon: '🗂️', label: 'Admin', ring: 'ring-zinc-400/30' },
-};
-
+const TYPE_META = { deep: { icon: '🧠', label: 'Deep Work' }, learning: { icon: '📚', label: 'Lernen' }, creative: { icon: '✨', label: 'Kreativ' }, admin: { icon: '🗂️', label: 'Admin' } };
 function BlockCard({ b, onStart, onSkip }) {
   const m = TYPE_META[b.type] || TYPE_META.deep;
   return (
-    <div className={'glass rounded-2xl p-4 ring-1 ' + m.ring + ' animate-fadeUp'}>
-      <div className="flex items-start gap-3">
-        <div className="text-2xl">{m.icon}</div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold truncate">{b.title}</div>
-          <div className="text-xs text-zinc-400 mt-0.5">{m.label} · {b.minutes} Min</div>
-          {b.why && <div className="text-xs text-zinc-500 mt-1 italic">„{b.why}"</div>}
-        </div>
-      </div>
-      <div className="flex gap-2 mt-3">
-        <button onClick={onStart} className="flex-1 btn-primary py-2.5 rounded-xl font-semibold text-white text-sm">🔒 Lock in</button>
-        <button onClick={onSkip} className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 text-sm text-zinc-400">Skip</button>
-      </div>
+    <div className="glass rounded-2xl p-4 animate-fadeUp">
+      <div className="flex items-start gap-3"><div className="text-2xl">{m.icon}</div><div className="flex-1 min-w-0"><div className="font-semibold truncate">{b.title}</div><div className="text-xs text-zinc-400 mt-0.5">{m.label} · {b.minutes} Min</div>{b.why && <div className="text-xs text-zinc-500 mt-1 italic">„{b.why}"</div>}</div></div>
+      <div className="flex gap-2 mt-3"><button onClick={onStart} className="flex-1 btn-primary py-2.5 rounded-xl font-semibold text-white text-sm">🔒 Lock in</button><button onClick={onSkip} className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 text-sm text-zinc-400">Skip</button></div>
     </div>
   );
 }
+function Streak({ n }) { return <div className="flex items-center gap-1.5 glass rounded-xl px-3 h-10" title="Fokus-Streak"><span className={n > 0 ? '' : 'grayscale opacity-50'}>🔥</span><span className="font-bold">{n}</span></div>; }
 
-function Streak({ n }) {
-  return (
-    <div className="flex items-center gap-1.5 glass rounded-xl px-3 h-10" title="Fokus-Streak">
-      <span className={n > 0 ? '' : 'grayscale opacity-50'}>🔥</span>
-      <span className="font-bold">{n}</span>
-    </div>
-  );
-}
-
-/* ============================ Brain Battery Widget ============================ */
 function BrainBattery({ battery, sleepQuality, onSleep }) {
-  const color = batteryColor(battery);
-  const r = 52, circ = 2 * Math.PI * r;
+  const color = batteryColor(battery); const r = 52, circ = 2 * Math.PI * r;
   return (
     <div className="glass rounded-3xl p-5 flex items-center gap-5">
-      <div className="relative w-32 h-32 shrink-0">
-        <svg viewBox="0 0 130 130" className="w-full h-full -rotate-90">
-          <circle cx="65" cy="65" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
-          <circle cx="65" cy="65" r={r} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
-            strokeDasharray={circ} strokeDashoffset={circ * (1 - battery / 100)} style={{ transition: 'stroke-dashoffset .8s ease, stroke .5s' }} />
-        </svg>
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="text-center">
-            <div className="text-3xl font-black" style={{ color }}>{battery}</div>
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">Battery</div>
-          </div>
-        </div>
+      <div className="relative w-28 h-28 shrink-0">
+        <svg viewBox="0 0 130 130" className="w-full h-full -rotate-90"><circle cx="65" cy="65" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" /><circle cx="65" cy="65" r={r} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - battery / 100)} style={{ transition: 'stroke-dashoffset .8s ease, stroke .5s' }} /></svg>
+        <div className="absolute inset-0 grid place-items-center"><div className="text-center"><div className="text-2xl font-black" style={{ color }}>{battery}</div><div className="text-[10px] uppercase tracking-wider text-zinc-500">Battery</div></div></div>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🔋</span>
-          <h3 className="font-bold">Brain Battery</h3>
-        </div>
+        <div className="flex items-center gap-2"><span className="text-lg">🔋</span><h3 className="font-bold">Brain Battery</h3></div>
         <p className="text-sm mt-0.5" style={{ color }}>{batteryLabel(battery)}</p>
-        {sleepQuality == null ? (
-          <div className="mt-3">
-            <div className="text-xs text-zinc-400 mb-1.5">Wie hast du geschlafen? (kalibriert deine Battery)</div>
-            <div className="flex gap-1.5">
-              {[1, 2, 3, 4, 5].map(q => (
-                <button key={q} onClick={() => onSleep(q)}
-                  className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:border-violet-400/60 text-sm">{q}</button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-500 mt-2">Sinkt bei Deep Work, lädt bei echten Pausen & Schlaf. Kein Wearable nötig.</p>
-        )}
+        {sleepQuality == null ? <div className="mt-3"><div className="text-xs text-zinc-400 mb-1.5">Wie hast du geschlafen?</div><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map(q => <button key={q} onClick={() => onSleep(q)} className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:border-violet-400/60 text-sm">{q}</button>)}</div></div> : <p className="text-xs text-zinc-500 mt-2">Sinkt bei Deep Work, lädt bei Pausen & Schlaf. Kein Wearable nötig.</p>}
       </div>
     </div>
   );
 }
 
-/* ============================ Session (Locked-in mode) ============================ */
+/* ============================ Session ============================ */
 const RECOVERIES = [
   { icon: '🌬️', t: 'Box-Breathing', d: '4 Sek ein · 4 halten · 4 aus · 4 halten. 4 Runden.', amt: 8 },
   { icon: '🚶', t: 'Kurzer Walk', d: '2 Minuten laufen — am besten raus oder ans Fenster.', amt: 10 },
   { icon: '☀️', t: 'Licht tanken', d: '2 Min Tageslicht / ans Fenster. Blick in die Ferne.', amt: 9 },
-  { icon: '💧', t: 'Wasser + Weg vom Screen', d: 'Trink ein Glas Wasser, Augen vom Bildschirm.', amt: 7 },
+  { icon: '💧', t: 'Wasser + Screen-Pause', d: 'Trink ein Glas Wasser, Augen weg vom Bildschirm.', amt: 7 },
 ];
-
 function Session({ block, battery, profile, onFinish, onRecharge, onExit }) {
   const total = block.minutes * 60;
   const [left, setLeft] = useState(total);
   const [running, setRunning] = useState(true);
   const [distractions, setDistractions] = useState([]);
-  const [phase, setPhase] = useState('focus'); // focus | recovery
+  const [phase, setPhase] = useState('focus');
   const [recovery, setRecovery] = useState(null);
-  const startedAt = useRef(Date.now());
-
   useEffect(() => {
     if (!running || phase !== 'focus') return;
-    const id = setInterval(() => setLeft(l => {
-      if (l <= 1) { clearInterval(id); complete(true); return 0; }
-      return l - 1;
-    }), 1000);
+    const id = setInterval(() => setLeft(l => { if (l <= 1) { clearInterval(id); doComplete(true); return 0; } return l - 1; }), 1000);
     return () => clearInterval(id);
   }, [running, phase]);
-
   const elapsedMin = () => Math.max(1, Math.round((total - left) / 60));
-
-  function logDistraction() {
-    setDistractions(d => [...d, { at: elapsedMin(), type: profile.distraction }]);
-  }
-
-  function complete(natural) {
-    const actual = natural ? block.minutes : elapsedMin();
-    // Erst Erholung anbieten, dann Debrief
-    const rec = RECOVERIES[Math.floor(Math.random() * RECOVERIES.length)];
-    setRecovery({ rec, actual });
-    setPhase('recovery');
-  }
-
+  const logDistraction = () => setDistractions(d => [...d, { at: elapsedMin(), type: profile.stoerfaktor }]);
+  function doComplete(natural) { const actual = natural ? block.minutes : elapsedMin(); setRecovery({ rec: RECOVERIES[Math.floor(Math.random() * RECOVERIES.length)], actual }); setPhase('recovery'); }
   const pct = ((total - left) / total) * 100;
-  const mm = String(Math.floor(left / 60)).padStart(2, '0');
-  const ss = String(left % 60).padStart(2, '0');
-  const lowBattery = battery < 35;
+  const mm = String(Math.floor(left / 60)).padStart(2, '0'), ss = String(left % 60).padStart(2, '0');
 
-  if (phase === 'recovery' && recovery) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <div className="max-w-sm w-full animate-fadeUp">
-          <div className="text-6xl mb-4 animate-floaty">{recovery.rec.icon}</div>
-          <div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold mb-1">Erholung · schützt deine Battery</div>
-          <h2 className="text-2xl font-extrabold mb-2">{recovery.rec.t}</h2>
-          <p className="text-zinc-400 mb-6">{recovery.rec.d}</p>
-          <button onClick={() => { onRecharge(recovery.rec.amt); onFinish(block, { actual: recovery.actual, rating: 0, distractions, pendingRating: true }); }}
-            className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">Erholt — weiter zum Debrief</button>
-          <button onClick={() => onFinish(block, { actual: recovery.actual, rating: 0, distractions })}
-            className="w-full mt-2 py-3 text-sm text-zinc-500 hover:text-zinc-300">Überspringen</button>
-        </div>
-      </div>
-    );
-  }
+  if (phase === 'recovery' && recovery) return (
+    <div className="min-h-screen ambient flex items-center justify-center p-6 text-center">
+      <div className="max-w-sm w-full animate-fadeUp"><div className="text-6xl mb-4 animate-floaty">{recovery.rec.icon}</div><div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold mb-1">Erholung · schützt deine Battery</div><h2 className="text-2xl font-extrabold mb-2">{recovery.rec.t}</h2><p className="text-zinc-400 mb-6">{recovery.rec.d}</p>
+      <button onClick={() => { onRecharge(recovery.rec.amt); onFinish(block, { actual: recovery.actual, rating: 0, distractions }); }} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">Erholt — weiter zum Debrief</button>
+      <button onClick={() => onFinish(block, { actual: recovery.actual, rating: 0, distractions })} className="w-full mt-2 py-3 text-sm text-zinc-500 hover:text-zinc-300">Überspringen</button></div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="flex items-center justify-between p-5">
-        <button onClick={onExit} className="text-sm text-zinc-500 hover:text-zinc-300">← Beenden</button>
-        <div className="text-xs text-zinc-500">Battery {battery}</div>
-      </div>
-
+    <div className="min-h-screen ambient flex flex-col">
+      <div className="flex items-center justify-between p-5"><button onClick={onExit} className="text-sm text-zinc-500 hover:text-zinc-300">← Beenden</button><div className="text-xs text-zinc-500">Battery {battery}</div></div>
       <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-8">
         <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-2">🔒 Locked in</div>
         <h2 className="text-xl font-bold text-center mb-1 max-w-sm">{block.title}</h2>
         {block.why && <p className="text-xs text-zinc-500 mb-8 text-center max-w-xs">„{block.why}"</p>}
-
         <div className="relative w-72 h-72 my-2">
-          <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-            <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
-            <circle cx="100" cy="100" r="88" fill="none" stroke="url(#g)" strokeWidth="6" strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 88} strokeDashoffset={2 * Math.PI * 88 * (1 - pct / 100)} style={{ transition: 'stroke-dashoffset 1s linear' }} />
-            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#8b5cf6" /><stop offset="1" stopColor="#d946ef" /></linearGradient></defs>
-          </svg>
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="text-center">
-              <div className="text-6xl font-black tabular-nums">{mm}:{ss}</div>
-              <div className="text-xs text-zinc-500 mt-1">{running ? 'in Progress' : 'pausiert'}</div>
-            </div>
-          </div>
+          <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90"><circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" /><circle cx="100" cy="100" r="88" fill="none" stroke="url(#g)" strokeWidth="6" strokeLinecap="round" strokeDasharray={2 * Math.PI * 88} strokeDashoffset={2 * Math.PI * 88 * (1 - pct / 100)} style={{ transition: 'stroke-dashoffset 1s linear' }} /><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#8b5cf6" /><stop offset="1" stopColor="#d946ef" /></linearGradient></defs></svg>
+          <div className="absolute inset-0 grid place-items-center"><div className="text-center"><div className="text-6xl font-black tabular-nums">{mm}:{ss}</div><div className="text-xs text-zinc-500 mt-1">{running ? 'in Progress' : 'pausiert'}</div></div></div>
         </div>
-
-        {lowBattery && (
-          <div className="glass rounded-xl px-4 py-2 mt-2 text-xs text-amber-300 border border-amber-400/20">
-            ⚠️ Niedrige Battery — halte diesen Block kurz und gönn dir danach echte Erholung.
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 mt-8">
-          <button onClick={() => setRunning(r => !r)} className="w-14 h-14 rounded-full glass grid place-items-center text-xl hover:border-white/30">{running ? '⏸' : '▶'}</button>
-          <button onClick={() => complete(false)} className="px-6 h-14 rounded-full btn-primary font-semibold text-white">Block beenden</button>
-        </div>
-
-        <button onClick={logDistraction} className="mt-6 text-sm text-zinc-500 hover:text-amber-300 transition">
-          😵‍💫 Ich hab mich ablenken lassen {distractions.length > 0 && <span className="text-amber-300 font-semibold">({distractions.length})</span>}
-        </button>
-        <p className="text-[11px] text-zinc-600 mt-1 max-w-xs text-center">Ein Tap, wenn du abdriftest — kein Urteil. Der Coach lernt daraus dein Muster.</p>
+        {battery < 35 && <div className="glass rounded-xl px-4 py-2 mt-2 text-xs text-amber-300 border border-amber-400/20">⚠️ Niedrige Battery — Block kurz halten, danach echte Erholung.</div>}
+        <div className="flex items-center gap-3 mt-8"><button onClick={() => setRunning(r => !r)} className="w-14 h-14 rounded-full glass grid place-items-center text-xl hover:border-white/30">{running ? '⏸' : '▶'}</button><button onClick={() => doComplete(false)} className="px-6 h-14 rounded-full btn-primary font-semibold text-white">Block beenden</button></div>
+        <button onClick={logDistraction} className="mt-6 text-sm text-zinc-500 hover:text-amber-300 transition">😵‍💫 Ich hab mich ablenken lassen {distractions.length > 0 && <span className="text-amber-300 font-semibold">({distractions.length})</span>}</button>
+        <p className="text-[11px] text-zinc-600 mt-1 max-w-xs text-center">Ein Tap, wenn du abdriftest — kein Urteil. Der Coach lernt dein Muster.</p>
       </div>
     </div>
   );
@@ -610,168 +700,50 @@ function Session({ block, battery, profile, onFinish, onRecharge, onExit }) {
 function Debrief({ session, profile, state, onDone }) {
   const { block, result } = session;
   const [rating, setRating] = useState(0);
-  const [extraDistractions, setExtra] = useState(result.distractions || []);
+  const [extra, setExtra] = useState(result.distractions || []);
   const [loading, setLoading] = useState(false);
   const [insight, setInsight] = useState(null);
+  const types = ['Handy', 'Social Media', 'Gedanken', 'Menschen', 'Müdigkeit', 'Langeweile'];
+  const topDistraction = useMemo(() => { const all = [...(state.blocks || [])].flatMap(b => b.distractions || []).map(d => d.type); const c = {}; all.forEach(t => c[t] = (c[t] || 0) + 1); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || profile.stoerfaktor; }, []);
 
-  const distractionTypes = ['Handy', 'Social Media', 'Gedanken', 'Menschen', 'Müdigkeit', 'Langeweile'];
+  async function analyze() { setLoading(true); const res = await askCoach('debrief', { planned: block.minutes, actual: result.actual, rating, distractions: extra, topDistraction, history: (state.history || []).slice(-5) }); setInsight(res); setLoading(false); }
 
-  const topDistraction = useMemo(() => {
-    const all = [...(state.blocks || [])].flatMap(b => b.distractions || []).map(d => d.type);
-    const c = {}; all.forEach(t => c[t] = (c[t] || 0) + 1);
-    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || profile.distraction;
-  }, []);
-
-  async function analyze() {
-    setLoading(true);
-    const res = await askCoach('debrief', {
-      planned: block.minutes, actual: result.actual, rating,
-      distractions: extraDistractions, topDistraction,
-      history: (state.history || []).slice(-5), profileDistraction: profile.distraction,
-    });
-    setInsight(res);
-    setLoading(false);
-  }
-
-  if (insight) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-md w-full glass rounded-3xl p-7 animate-fadeUp">
-          <div className="text-4xl mb-3">🧠</div>
-          <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-3">
-            Coach-Analyse {insight.source === 'local' && <span className="text-zinc-500">(Offline)</span>}
-          </div>
-          <div className="space-y-4">
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">Muster erkannt</div>
-              <p className="text-zinc-100">{insight.insight}</p>
-            </div>
-            <div className="glass rounded-2xl p-4 border-l-2 border-l-emerald-400/70">
-              <div className="text-xs text-emerald-300/80 mb-1 font-semibold">✅ Für morgen</div>
-              <p className="text-sm text-zinc-100">{insight.adjustment}</p>
-            </div>
-            {insight.encouragement && <p className="text-sm text-zinc-400 italic">{insight.encouragement}</p>}
-          </div>
-          <button onClick={onDone} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white mt-6">Weiter →</button>
-        </div>
-      </div>
-    );
-  }
+  if (insight) return (
+    <div className="min-h-screen ambient flex items-center justify-center p-6"><div className="max-w-md w-full glass rounded-3xl p-7 animate-fadeUp">
+      <div className="text-4xl mb-3">🧠</div><div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-3">Coach-Analyse {insight.source === 'local' && <span className="text-zinc-500">(Offline)</span>}</div>
+      <div className="space-y-4"><div><div className="text-xs text-zinc-500 mb-1">Muster erkannt</div><p className="text-zinc-100">{insight.insight}</p></div><div className="glass rounded-2xl p-4 border-l-2 border-l-emerald-400/70"><div className="text-xs text-emerald-300/80 mb-1 font-semibold">✅ Für morgen</div><p className="text-sm text-zinc-100">{insight.adjustment}</p></div>{insight.encouragement && <p className="text-sm text-zinc-400 italic">{insight.encouragement}</p>}</div>
+      <button onClick={onDone} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white mt-6">Weiter →</button></div></div>
+  );
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="max-w-md w-full glass rounded-3xl p-7 animate-fadeUp">
-        <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-1">Session-Debrief</div>
-        <h2 className="text-2xl font-extrabold mb-1">{block.title}</h2>
-        <p className="text-zinc-400 text-sm mb-6">{result.actual} von {block.minutes} Min fokussiert.</p>
-
-        <div className="mb-6">
-          <div className="text-sm font-semibold mb-2">Wie fokussiert warst du?</div>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map(s => (
-              <button key={s} onClick={() => setRating(s)}
-                className={'flex-1 h-12 rounded-xl border text-lg transition ' + (rating >= s ? 'bg-amber-400/20 border-amber-400/50 text-amber-300' : 'bg-white/5 border-white/10')}>★</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <div className="text-sm font-semibold mb-2">Was hat dich rausgezogen? <span className="text-zinc-500 font-normal">(optional)</span></div>
-          <div className="flex flex-wrap gap-2">
-            {distractionTypes.map(d => {
-              const active = extraDistractions.some(x => x.type === d);
-              return (
-                <button key={d} onClick={() => setExtra(prev => active ? prev.filter(x => x.type !== d) : [...prev, { type: d, at: 0 }])}
-                  className={'px-3 py-1.5 rounded-full text-sm border transition ' + (active ? 'bg-violet-500/25 border-violet-400/50 text-violet-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:border-white/25')}>{d}</button>
-              );
-            })}
-          </div>
-        </div>
-
-        <button onClick={analyze} disabled={loading || rating === 0}
-          className={'w-full py-3.5 rounded-2xl font-semibold text-white transition ' + (loading || rating === 0 ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>
-          {loading ? 'Coach analysiert…' : '🧠 Analyse & Tipp für morgen'}
-        </button>
-      </div>
-    </div>
+    <div className="min-h-screen ambient flex items-center justify-center p-6"><div className="max-w-md w-full glass rounded-3xl p-7 animate-fadeUp">
+      <div className="text-xs uppercase tracking-widest text-violet-300/80 font-semibold mb-1">Session-Debrief</div><h2 className="text-2xl font-extrabold mb-1">{block.title}</h2><p className="text-zinc-400 text-sm mb-6">{result.actual} von {block.minutes} Min fokussiert.</p>
+      <div className="mb-6"><div className="text-sm font-semibold mb-2">Wie fokussiert warst du?</div><div className="flex gap-2">{[1, 2, 3, 4, 5].map(s => <button key={s} onClick={() => setRating(s)} className={'flex-1 h-12 rounded-xl border text-lg transition ' + (rating >= s ? 'bg-amber-400/20 border-amber-400/50 text-amber-300' : 'bg-white/5 border-white/10')}>★</button>)}</div></div>
+      <div className="mb-6"><div className="text-sm font-semibold mb-2">Was hat dich rausgezogen? <span className="text-zinc-500 font-normal">(optional)</span></div><div className="flex flex-wrap gap-2">{types.map(d => { const active = extra.some(x => x.type === d); return <button key={d} onClick={() => setExtra(prev => active ? prev.filter(x => x.type !== d) : [...prev, { type: d, at: 0 }])} className={'px-3 py-1.5 rounded-full text-sm border transition ' + (active ? 'bg-violet-500/25 border-violet-400/50 text-violet-200' : 'bg-white/5 border-white/10 text-zinc-400 hover:border-white/25')}>{d}</button>; })}</div></div>
+      <button onClick={analyze} disabled={loading || rating === 0} className={'w-full py-3.5 rounded-2xl font-semibold text-white transition ' + (loading || rating === 0 ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>{loading ? 'Coach analysiert…' : '🧠 Analyse & Tipp für morgen'}</button>
+    </div></div>
   );
 }
 
 /* ============================ Insights ============================ */
-function Insights({ state, onBack }) {
+function Insights({ state }) {
   const hist = state.history || [];
-  const today = {
-    date: todayStr(),
-    focusMinutes: state.blocks.filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0),
-  };
+  const today = { date: todayStr(), focusMinutes: state.blocks.filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0) };
   const series = [...hist, today].slice(-10);
   const maxM = Math.max(30, ...series.map(s => s.focusMinutes));
   const totalMin = series.reduce((a, s) => a + s.focusMinutes, 0);
-
-  // Ablenkungs-Aggregat
-  const distr = {};
-  [...(state.blocks || [])].flatMap(b => b.distractions || []).forEach(d => distr[d.type] = (distr[d.type] || 0) + 1);
+  const distr = {}; [...(state.blocks || [])].flatMap(b => b.distractions || []).forEach(d => distr[d.type] = (distr[d.type] || 0) + 1);
   const topDistr = Object.entries(distr).sort((a, b) => b[1] - a[1]).slice(0, 4);
-
   return (
-    <div className="max-w-2xl mx-auto px-5 pb-24 pt-8">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="w-10 h-10 rounded-xl glass grid place-items-center hover:border-white/25">←</button>
-        <h1 className="text-2xl font-extrabold">Dein Fortschritt</h1>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <Stat label="Streak" value={state.streak} suffix="🔥" />
-        <Stat label="Fokus gesamt" value={totalMin} suffix="min" />
-        <Stat label="Ø / Tag" value={series.length ? Math.round(totalMin / series.length) : 0} suffix="min" />
-      </div>
-
-      <div className="glass rounded-3xl p-5 mb-6">
-        <h3 className="font-bold mb-4">Fokus-Minuten pro Tag</h3>
-        <div className="flex items-end gap-2 h-40">
-          {series.map((s, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-              <div className="w-full rounded-t-lg btn-primary transition-all" style={{ height: `${(s.focusMinutes / maxM) * 100}%`, minHeight: s.focusMinutes ? '4px' : '0' }} title={`${s.focusMinutes} min`}></div>
-              <div className="text-[9px] text-zinc-600">{s.date.slice(5)}</div>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-zinc-500 mt-3">Deine Fokus-Kapazität wächst mit jedem Block — das ist Training, kein Tracking.</p>
-      </div>
-
-      <div className="glass rounded-3xl p-5">
-        <h3 className="font-bold mb-4">Deine größten Fokus-Leaks</h3>
-        {topDistr.length === 0 ? (
-          <p className="text-sm text-zinc-500">Noch keine Ablenkungen erfasst. Logge sie in Sessions, damit der Coach dein Muster findet.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {topDistr.map(([t, n]) => {
-              const max = topDistr[0][1];
-              return (
-                <div key={t} className="flex items-center gap-3">
-                  <div className="w-28 text-sm text-zinc-300 truncate">{t}</div>
-                  <div className="flex-1 h-3 rounded-full bg-white/5 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: 'linear-gradient(90deg,#fbbf24,#f87171)' }}></div>
-                  </div>
-                  <div className="text-xs text-zinc-500 w-6 text-right">{n}×</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+    <div className="max-w-2xl mx-auto px-5 pt-8">
+      <h1 className="text-2xl font-extrabold mb-6">Dein Fortschritt</h1>
+      <div className="grid grid-cols-3 gap-3 mb-6"><Stat label="Streak" value={state.streak} suffix="🔥" /><Stat label="Fokus gesamt" value={totalMin} suffix="min" /><Stat label="Ø / Tag" value={series.length ? Math.round(totalMin / series.length) : 0} suffix="min" /></div>
+      <div className="glass rounded-3xl p-5 mb-6"><h3 className="font-bold mb-4">Fokus-Minuten pro Tag</h3><div className="flex items-end gap-2 h-40">{series.map((s, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full rounded-t-lg btn-primary" style={{ height: `${(s.focusMinutes / maxM) * 100}%`, minHeight: s.focusMinutes ? '4px' : '0' }} title={`${s.focusMinutes} min`}></div><div className="text-[9px] text-zinc-600">{s.date.slice(5)}</div></div>)}</div><p className="text-xs text-zinc-500 mt-3">Deine Fokus-Kapazität wächst mit jedem Block — Training, kein Tracking.</p></div>
+      <div className="glass rounded-3xl p-5"><h3 className="font-bold mb-4">Deine größten Fokus-Leaks</h3>{topDistr.length === 0 ? <p className="text-sm text-zinc-500">Noch keine Ablenkungen erfasst. Logge sie in Sessions.</p> : <div className="space-y-2.5">{topDistr.map(([t, n]) => { const max = topDistr[0][1]; return <div key={t} className="flex items-center gap-3"><div className="w-28 text-sm text-zinc-300 truncate">{t}</div><div className="flex-1 h-3 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: 'linear-gradient(90deg,#fbbf24,#f87171)' }}></div></div><div className="text-xs text-zinc-500 w-6 text-right">{n}×</div></div>; })}</div>}</div>
     </div>
   );
 }
-
-function Stat({ label, value, suffix }) {
-  return (
-    <div className="glass rounded-2xl p-4 text-center">
-      <div className="text-2xl font-black grad-text">{value}<span className="text-sm text-zinc-500 font-bold ml-0.5">{suffix}</span></div>
-      <div className="text-[11px] uppercase tracking-wider text-zinc-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
+function Stat({ label, value, suffix }) { return <div className="glass rounded-2xl p-4 text-center"><div className="text-2xl font-black grad-text">{value}<span className="text-sm text-zinc-500 font-bold ml-0.5">{suffix}</span></div><div className="text-[11px] uppercase tracking-wider text-zinc-500 mt-0.5">{label}</div></div>; }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
