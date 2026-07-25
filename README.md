@@ -9,15 +9,17 @@ Abgabefrist: **So, 26. Juli 2026, 12:00 ET (18:00 DE)**.
 
 ## Was ist DoRealWork?
 
-Die meisten Fokus-Apps *blockieren Apps* oder zählen *dumme Timer* – sie **messen** Disziplin.
-DoRealWork **denkt für dich**: ein persönlicher KI-Coach, der
+Ein **KI-Ziel-Coach**: Du sagst dein Ziel — die App zeigt dir die **schnellsten Methoden**, coacht
+dich in jeder Disziplin (Schritt-für-Schritt, Chat, sogar **Form-Check per Kamera**) und hält dich
+**locked in**, ohne dass du ausbrennst.
 
-1. deinen Tag in adaptive Fokus-Blöcke plant,
-2. dich live durch die „Locked-in"-Session führt,
-3. dich danach debrieft und aus deinen Ablenkungsmustern **lernt**,
-4. und über die **🔋 Brain Battery** verhindert, dass du ausbrennst (Fokus + Erholung integriert, ohne Wearable).
+1. **Ziel & Methoden:** KI generiert die besten Hebel zum Ziel — jeder anklickbar mit eigenem Coaching.
+2. **Methoden-Detail:** Fahrplan + adaptiver Coaching-Chat + 📸 Foto/Kamera-Analyse (z. B. Übungs-Form, Mahlzeit).
+3. **Permanenter KI-Assistent** (linke Leiste): frag jederzeit „Was ist mein nächster Schritt?".
+4. **Fokus-Modus:** adaptive Blöcke, Locked-in-Sessions, Debrief-Analyse.
+5. **🔋 Brain Battery:** verhindert Burnout (Fokus + Erholung integriert, ohne Wearable).
 
-> Kernprinzip: **Trainiert Fokus, statt ihn nur zu tracken.**
+> Kernprinzip: **Ein Coach, der für dich denkt — trainiert statt trackt.**
 
 ## Status
 
