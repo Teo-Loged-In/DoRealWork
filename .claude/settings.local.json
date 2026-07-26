@@ -21,7 +21,9 @@
       "Bash(git push *)",
       "Bash(git commit -q -m 'Docs: Progress 08 \\(Account-Schritt\\) *)",
       "Bash(git commit -q -m 'Feature: Name bei Account-Erstellung; persoenliche Ansprache in App \\(Dashboard/Assistent/Trial\\) + KI nutzt den Namen *)",
-      "Bash(git commit -q -m 'Feature: Multi-Ziel mit Chrome-artigen Tabs \\(jedes Ziel eigener Coaching-Bereich\\); neues Ziel via + \\(Starter-Onboarding\\); Ziel abhaken -> Reward + Liste erreichter Ziele; Auto-Migration alter Einzel-Ziel-Daten *)"
+      "Bash(git commit -q -m 'Feature: Multi-Ziel mit Chrome-artigen Tabs \\(jedes Ziel eigener Coaching-Bereich\\); neues Ziel via + \\(Starter-Onboarding\\); Ziel abhaken -> Reward + Liste erreichter Ziele; Auto-Migration alter Einzel-Ziel-Daten *)",
+      "Bash(rm -f check_*.html _verify_*.html)",
+      "Bash(git commit *)"
     ]
   }
 }
