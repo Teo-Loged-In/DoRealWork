@@ -33,7 +33,8 @@
       "Bash(curl -s \"https://teo-loged-in.github.io/DoRealWork/index.html?cb=$\\(date +%s\\)\" -H \"Cache-Control: no-cache\")",
       "Read(//tmp/**)",
       "Bash(rm -f verify_*.html _verify_*.html check_*.html)",
-      "Bash(git commit -q -m 'Feature: Routinen/Habits mit KI-Optimierung \\(Jetzt vs Optimiert, Aenderungen, Produkte, Warum-besser\\); Konto-/Einstellungen-Avatar oben \\(Initialen\\); Zurueck-Pfeile ueberall \\(BackBar\\); Fix Focus-Props \\(updateLog/onBack\\) *)"
+      "Bash(git commit -q -m 'Feature: Routinen/Habits mit KI-Optimierung \\(Jetzt vs Optimiert, Aenderungen, Produkte, Warum-besser\\); Konto-/Einstellungen-Avatar oben \\(Initialen\\); Zurueck-Pfeile ueberall \\(BackBar\\); Fix Focus-Props \\(updateLog/onBack\\) *)",
+      "Bash(git commit -q -m 'Docs: Progress 10 \\(Deploy-Fix, v1, Habits, Konto-Menue, Back-Pfeile\\) *)"
     ]
   }
 }
