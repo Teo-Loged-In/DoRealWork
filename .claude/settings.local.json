@@ -15,7 +15,8 @@
       "Bash(git commit -q -m 'Feature: Gruenes Design + Dino '\\\\''Rex'\\\\'', Abo-Bug-Fix \\(keine Sperre, X schliessbar\\), freier Timer + Stoppuhr, Pausen im KI-Plan, Kalender-Export \\(.ics\\), Benachrichtigungen *)",
       "Bash(git commit -q -m 'Docs: Progress 06 + Vercel-Setup-Anleitung + README \\(Rex/Live-KI\\) *)",
       "Bash(rm -f _verify_*.html)",
-      "Bash(git commit -q -m 'Feature: Fokus-Journal \\(Datum/Uhrzeit/Dauer/Bewertung + Notizen, tageuebergreifend\\) + Chat-Dateianhang \\(Plus-Button: Fotos/PDF/Text -> KI-Analyse & Zusammenfassung via Vision\\) *)"
+      "Bash(git commit -q -m 'Feature: Fokus-Journal \\(Datum/Uhrzeit/Dauer/Bewertung + Notizen, tageuebergreifend\\) + Chat-Dateianhang \\(Plus-Button: Fotos/PDF/Text -> KI-Analyse & Zusammenfassung via Vision\\) *)",
+      "Bash(git commit -q -m 'Docs: Progress 07 \\(Journal & Dateianhang\\) *)"
     ]
   }
 }
