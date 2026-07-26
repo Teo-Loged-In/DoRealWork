@@ -91,13 +91,13 @@ async function hashPassword(pw) {
 }
 const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
 const getAccounts = () => LS.get('drw_accounts', {});
-async function createAccount(email, pw) {
+async function createAccount(email, pw, name) {
   const key = String(email).trim().toLowerCase();
   const accs = getAccounts();
   if (accs[key]) return { ok: false, error: 'Für diese E-Mail gibt es schon ein Konto. Bitte einloggen.' };
-  accs[key] = { email: email.trim(), passHash: await hashPassword(pw), createdAt: new Date().toISOString() };
+  accs[key] = { email: email.trim(), name: (name || '').trim(), passHash: await hashPassword(pw), createdAt: new Date().toISOString() };
   LS.set('drw_accounts', accs);
-  return { ok: true, email: email.trim() };
+  return { ok: true, email: email.trim(), name: (name || '').trim() };
 }
 async function loginAccount(email, pw) {
   const key = String(email).trim().toLowerCase();
@@ -105,7 +105,7 @@ async function loginAccount(email, pw) {
   const a = accs[key];
   if (!a) return { ok: false, error: 'Kein Konto mit dieser E-Mail. Erstelle zuerst eins.' };
   if (a.passHash !== await hashPassword(pw)) return { ok: false, error: 'Passwort stimmt nicht.' };
-  return { ok: true, email: a.email };
+  return { ok: true, email: a.email, name: a.name || '' };
 }
 
 /* ============================ Kalender-Export (.ics für Apple/Google) ============================ */
@@ -366,6 +366,7 @@ function App() {
   const [coach, setCoach] = useState(() => LS.get('drw_coach', null));
   const [assistant, setAssistant] = useState(() => LS.get('drw_assistant', []));
   const [authEmail, setAuthEmail] = useState(() => LS.get('drw_authEmail', null));
+  const [authName, setAuthName] = useState(() => LS.get('drw_authName', ''));
   const [state, setState] = useState(() => freshOrLoad());
   const [view, setView] = useState('dashboard');     // dashboard | method | focus | insights | assistant(mobile)
   const [activeMethodId, setActiveMethodId] = useState(null);
@@ -380,6 +381,7 @@ function App() {
   useEffect(() => LS.set('drw_coach', coach), [coach]);
   useEffect(() => LS.set('drw_assistant', assistant), [assistant]);
   useEffect(() => LS.set('drw_authEmail', authEmail), [authEmail]);
+  useEffect(() => LS.set('drw_authName', authName), [authName]);
   useEffect(() => LS.set('drw_state', state), [state]);
   useEffect(() => { if (profile && (!coach || !coach.methods)) generateMethods(profile); }, []);
 
@@ -399,8 +401,8 @@ function App() {
 
   if (!profile) return <Onboarding onDone={async p => { setProfile(p); await generateMethods(p); }} />;
 
-  // Nach dem Onboarding: eigenen Account erstellen / einloggen (E-Mail + Passwort)
-  if (!authEmail) return <Auth profile={profile} onAuthed={setAuthEmail} />;
+  // Nach dem Onboarding: eigenen Account erstellen / einloggen (Name + E-Mail + Passwort)
+  if (!authEmail) return <Auth profile={profile} onAuthed={(email, name) => { setAuthEmail(email); setAuthName(name || ''); if (name) setProfile(p => ({ ...(p || {}), name })); }} />;
 
   // Abo-Gate: nach dem Account einmal den Trial-Start zeigen. DANACH ist die App IMMER nutzbar
   // (Gratis-Version). Die Paywall ist nur noch ein schließbares Upgrade-Overlay – keine Sperre mehr.
@@ -408,7 +410,7 @@ function App() {
 
   async function generateMethods(p) {
     setCoach(c => ({ ...(c || {}), loading: true }));
-    const res = await askCoach('methods', { goal: p.goal, stoerfaktor: p.stoerfaktor, hindernis: p.hindernis });
+    const res = await askCoach('methods', { name: p.name, goal: p.goal, stoerfaktor: p.stoerfaktor, hindernis: p.hindernis });
     setCoach({ intro: res.intro || '', methods: (res.methods || []).map(m => ({ ...m, id: uid() })), blockerHelp: res.blockerHelp || '', approaches: {}, threads: {}, captures: {}, source: res.source, loading: false });
   }
 
@@ -457,7 +459,7 @@ function App() {
       {/* Main */}
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
         <TrialBanner sub={sub} onManage={() => nav('account')} onUpgrade={() => setShowPaywall(true)} />
-        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state','drw_sub','drw_authEmail'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
+        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state','drw_sub','drw_authEmail','drw_authName'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
         {view === 'method' && activeMethod && <MethodDetail method={activeMethod} profile={profile} coach={coach} setCoach={setCoach} onBack={() => setView('dashboard')} />}
         {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} updateLog={updateLog} />}
         {view === 'insights' && <Insights state={state} />}
@@ -576,6 +578,8 @@ function Dashboard({ profile, coach, state, onOpenMethod, onRegenerate, onReset,
     <div className="max-w-3xl mx-auto px-5 pt-8">
       <div className="flex items-center justify-between mb-6 lg:hidden"><Brand /><SourceBadge source={coach && coach.source} /></div>
 
+      {profile.name && <div className="flex items-center gap-2 mb-4 animate-fadeUp"><Rex size={30} /><div className="text-lg font-bold">Guten {timeOfDay()}, {profile.name}! <span className="font-normal text-zinc-400 text-sm">Rex ist bereit.</span></div></div>}
+
       <div className="glass rounded-3xl p-6 mb-6 animate-fadeUp">
         <div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold mb-1">Dein Ziel</div>
         <h1 className="text-2xl font-extrabold mb-2">{profile.goal}</h1>
@@ -633,7 +637,7 @@ function MethodDetail({ method, profile, coach, setCoach, onBack }) {
   useEffect(() => {
     if (!approach && !loadingApproach) {
       setLoadingApproach(true);
-      askCoach('approach', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method.title }).then(res => {
+      askCoach('approach', { name: profile.name, goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method.title }).then(res => {
         setCoach(c => ({ ...c, approaches: { ...(c.approaches || {}), [method.id]: { steps: res.steps || [], firstQuestions: res.firstQuestions || [], source: res.source } } }));
         setLoadingApproach(false);
       });
@@ -718,7 +722,7 @@ function ThreadChat({ profile, method, messages, setMessages, suggestions }) {
     const msg = (text != null ? text : input).trim(); if (!msg || busy) return;
     const next = [...messages, { role: 'user', content: msg }];
     setMessages(next); setInput(''); setBusy(true);
-    const res = await askCoach('chat', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method ? method.title : null, messages: next });
+    const res = await askCoach('chat', { name: profile.name, goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, method: method ? method.title : null, messages: next });
     setMessages(m => [...m, { role: 'assistant', content: res.text || '(keine Antwort)', source: res.source }]);
     setBusy(false);
   }
@@ -771,7 +775,7 @@ function Assistant({ profile, coach, state, messages, setMessages }) {
     const aiText = (msg || 'Bitte wirf einen Blick auf die angehängten Materialien und fasse sie klar zusammen (Kernpunkte, Wichtiges zum Lernen).') + textParts.join('');
     const aiMessages = [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: aiText }];
     const images = atts.filter(a => a.kind === 'image').map(a => ({ mediaType: a.mediaType, data: a.data }));
-    const res = await askCoach('chat', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, focusSummary, messages: aiMessages, attachments: images });
+    const res = await askCoach('chat', { name: profile.name, goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, focusSummary, messages: aiMessages, attachments: images });
     setMessages(m => [...m, { role: 'assistant', content: res.text || '(keine Antwort)', source: res.source }]);
     setBusy(false);
   }
@@ -779,13 +783,13 @@ function Assistant({ profile, coach, state, messages, setMessages }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 flex items-center gap-2 border-b border-white/10">
-        <span className="text-lg">💬</span><div><div className="font-bold text-sm leading-none">KI-Coach</div><div className="text-[10px] text-zinc-500">immer für dich da</div></div>
+        <Rex size={26} /><div><div className="font-bold text-sm leading-none">Rex · dein KI-Coach</div><div className="text-[10px] text-zinc-500">immer für dich da</div></div>
         {coach && coach.source === 'local' && <span className="ml-auto"><SourceBadge source="local" /></span>}
       </div>
       <div ref={scrollRef} className="chat-scroll flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
           <div className="space-y-2">
-            <p className="text-sm text-zinc-400">Frag mich alles zu deinem Ziel — z. B. „Ich bin grad im Gym, was trainiere ich heute?"</p>
+            <p className="text-sm text-zinc-400">{profile.name ? `Hey ${profile.name}! ` : ''}Frag mich alles zu deinem Ziel — z. B. „Ich bin grad im Gym, was trainiere ich heute?"</p>
             {quick.map((q, i) => <button key={i} onClick={() => send(q)} className="block w-full text-left text-sm glass rounded-xl px-3 py-2 hover:border-emerald-400/40">{q}</button>)}
           </div>
         )}
@@ -854,7 +858,7 @@ function Focus({ profile, state, patch, onStart, onSkip }) {
 
   async function generate() {
     if (!tasks.trim()) return; setLoading(true);
-    const res = await askCoach('plan', { goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, chronotype: profile.chronotype, baselineMinutes: profile.baselineMinutes, battery: state.battery, timeOfDay: timeOfDay(), tasks });
+    const res = await askCoach('plan', { name: profile.name, goal: profile.goal, stoerfaktor: profile.stoerfaktor, hindernis: profile.hindernis, chronotype: profile.chronotype, baselineMinutes: profile.baselineMinutes, battery: state.battery, timeOfDay: timeOfDay(), tasks });
     setCoachNote(res.coachNote || ''); setAiSource(res.source);
     setOverflow(res.overflow || []);
     const blocks = (res.blocks || []).map(b => ({ ...b, id: uid(), status: 'todo', distractions: [] }));
@@ -1127,6 +1131,7 @@ const TRIAL_BENEFITS = [
 
 function Auth({ profile, onAuthed }) {
   const [mode, setMode] = useState('signup');   // signup | login
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
@@ -1136,14 +1141,15 @@ function Auth({ profile, onAuthed }) {
 
   async function submit() {
     setErr('');
+    if (!login && name.trim().length < 2) return setErr('Bitte gib deinen Namen ein.');
     if (!validEmail(email)) return setErr('Bitte gib eine gültige E-Mail-Adresse ein.');
     if (pw.length < 6) return setErr('Das Passwort braucht mindestens 6 Zeichen.');
     if (!login && pw !== pw2) return setErr('Die Passwörter stimmen nicht überein.');
     setBusy(true);
-    const res = login ? await loginAccount(email, pw) : await createAccount(email, pw);
+    const res = login ? await loginAccount(email, pw) : await createAccount(email, pw, name);
     setBusy(false);
     if (!res.ok) return setErr(res.error);
-    onAuthed(res.email);
+    onAuthed(res.email, res.name || '');
   }
 
   return (
@@ -1152,6 +1158,14 @@ function Auth({ profile, onAuthed }) {
         <div className="mb-3"><Rex size={46} bob /></div>
         <h1 className="text-2xl font-extrabold mb-1">{login ? 'Willkommen zurück' : 'Erstelle deinen Account'}</h1>
         <p className="text-zinc-400 text-sm mb-5">{login ? 'Melde dich an, um mit Rex weiterzumachen.' : <>Dein Ziel <span className="text-zinc-200 font-semibold">„{profile.goal}"</span> ist gespeichert. Sichere deinen Fortschritt mit einem eigenen Konto.</>}</p>
+
+        {!login && (
+          <>
+            <label className="text-xs font-semibold text-zinc-300">Dein Name</label>
+            <input value={name} onChange={e => setName(e.target.value)} type="text" autoComplete="given-name" placeholder="Wie sollen wir dich nennen?"
+              className="w-full mt-1 mb-3 rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-emerald-400/60 text-sm" />
+          </>
+        )}
 
         <label className="text-xs font-semibold text-zinc-300">E-Mail</label>
         <input value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="du@beispiel.de"
@@ -1193,8 +1207,8 @@ function TrialStart({ profile, account, onStart }) {
     <div className="min-h-screen ambient flex items-center justify-center p-5">
       <div className="w-full max-w-md glass rounded-3xl p-7 animate-fadeUp">
         <div className="text-4xl mb-3">🎁</div>
-        <h1 className="text-2xl font-extrabold mb-1">7 Tage kostenlos testen</h1>
-        <p className="text-zinc-400 text-sm mb-5">Dein Coach für <span className="text-zinc-200 font-semibold">„{profile.goal}"</span> steht bereit. Teste alles 7 Tage gratis.</p>
+        <h1 className="text-2xl font-extrabold mb-1">{profile.name ? `${profile.name}, teste 7 Tage kostenlos` : '7 Tage kostenlos testen'}</h1>
+        <p className="text-zinc-400 text-sm mb-5">Dein Coach Rex für <span className="text-zinc-200 font-semibold">„{profile.goal}"</span> steht bereit. Teste alles 7 Tage gratis.</p>
         <div className="space-y-3 mb-5">
           {TRIAL_BENEFITS.map((b, i) => (
             <div key={i} className="flex gap-3"><span className="text-xl">{b.icon}</span><div><div className="text-sm font-semibold">{b.t}</div><div className="text-xs text-zinc-400">{b.d}</div></div></div>

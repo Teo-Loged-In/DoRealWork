@@ -64,7 +64,8 @@ const COACH_PERSONA =
   "immer umsetzbare Schritte. Wenn dir Infos fehlen, stellst du gezielte Rückfragen.";
 
 function ctxLine(p) {
-  return `Kontext des Nutzers: Ziel="${p.goal || "?"}". Größter Störfaktor="${p.stoerfaktor || "?"}". ` +
+  const nameBit = p.name ? `Name des Nutzers="${p.name}" (sprich ihn/sie ab und zu direkt mit dem Namen an). ` : "";
+  return `Kontext des Nutzers: ${nameBit}Ziel="${p.goal || "?"}". Größter Störfaktor="${p.stoerfaktor || "?"}". ` +
     `Hindernis zum Ziel="${p.hindernis || "?"}".`;
 }
 
