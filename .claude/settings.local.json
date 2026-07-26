@@ -17,7 +17,9 @@
       "Bash(rm -f _verify_*.html)",
       "Bash(git commit -q -m 'Feature: Fokus-Journal \\(Datum/Uhrzeit/Dauer/Bewertung + Notizen, tageuebergreifend\\) + Chat-Dateianhang \\(Plus-Button: Fotos/PDF/Text -> KI-Analyse & Zusammenfassung via Vision\\) *)",
       "Bash(git commit -q -m 'Docs: Progress 07 \\(Journal & Dateianhang\\) *)",
-      "Bash(git commit -q -m 'Feature: Account-Schritt \\(E-Mail + Passwort\\) nach Onboarding, vor Trial; Passwort gehasht \\(SHA-256, localStorage\\); Login/Signup, Abmelden im Konto-Screen *)"
+      "Bash(git commit -q -m 'Feature: Account-Schritt \\(E-Mail + Passwort\\) nach Onboarding, vor Trial; Passwort gehasht \\(SHA-256, localStorage\\); Login/Signup, Abmelden im Konto-Screen *)",
+      "Bash(git push *)",
+      "Bash(git commit -q -m 'Docs: Progress 08 \\(Account-Schritt\\) *)"
     ]
   }
 }
