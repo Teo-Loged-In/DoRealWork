@@ -96,7 +96,7 @@ function buildRequest(type, p) {
     return { system, messages: [{ role: "user", content: user }], expectJson: true };
   }
 
-  // ---- Freier Coaching-Chat (Assistent ODER Methoden-Thread) ----
+  // ---- Freier Coaching-Chat (Assistent ODER Methoden-Thread) – optional mit Datei-Anhängen ----
   if (type === "chat") {
     let system = COACH_PERSONA + "\n" + ctxLine(p);
     if (p.method) system += `\nIhr arbeitet gerade an der Methode: "${p.method}". Bleibe fokussiert darauf.`;
@@ -105,9 +105,26 @@ function buildRequest(type, p) {
       "\nAntworte hilfreich und kompakt. Wenn der Nutzer z. B. seine Ernährung/sein Training nennt, " +
       "sag klar was gut/schlecht ist und wie man es verbessert, nenne konkrete Lebensmittel/Übungen. " +
       "Wenn Kaufempfehlungen sinnvoll sind, frag nach Supermarkt (Edeka/Aldi/…) und Budget und schlage passende Produkte vor.";
+    system +=
+      "\nWenn der Nutzer Dateien/Fotos/Arbeitsmaterialien anhängt (z. B. beim Lernen): analysiere sie und gib eine " +
+      "klare, strukturierte Zusammenfassung — Kernaussagen, die wichtigsten Punkte zum Merken, und (wenn sinnvoll) " +
+      "eine kurze Lern-/Umsetzungshilfe. Bei einem Foto einer Übung: Form-Check. Bei einer Mahlzeit: Nährwert-Einschätzung.";
     const messages = (p.messages || []).map(m => ({ role: m.role, content: m.content }));
     if (!messages.length) messages.push({ role: "user", content: "Leg los und hilf mir mit meinem Ziel." });
-    return { system, messages, maxTokens: 900 };
+    // Bild-Anhänge an die LETZTE User-Nachricht hängen (Claude Vision)
+    const imgs = (p.attachments || []).filter(a => a && a.data && a.mediaType);
+    if (imgs.length) {
+      let li = messages.length - 1;
+      while (li >= 0 && messages[li].role !== "user") li--;
+      if (li >= 0) {
+        const textContent = typeof messages[li].content === "string" ? messages[li].content : "";
+        messages[li] = { role: "user", content: [
+          { type: "text", text: textContent || "Bitte analysiere die angehängten Bilder." },
+          ...imgs.map(a => ({ type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } })),
+        ] };
+      }
+    }
+    return { system, messages, maxTokens: 1100 };
   }
 
   // ---- Bild-Analyse (Form-Check / Mahlzeit-Foto) ----
