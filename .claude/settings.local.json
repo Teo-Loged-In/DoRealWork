@@ -5,7 +5,14 @@
       "Bash(gh --version)",
       "Bash(npm --version)",
       "Bash(vercel --version)",
-      "PowerShell(winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --silent)"
+      "PowerShell(winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements --silent)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}, %{size_download} bytes\\\\n\" http://localhost:8799/index.html)",
+      "Bash(python -m http.server 8799 --bind 127.0.0.1)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}, %{size_download} bytes\\\\n\" http://127.0.0.1:8799/index.html)",
+      "Bash(npx -v)",
+      "PowerShell($n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if \\($n\\) { node -v } else { \"no-node\" })",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Feature: Gruenes Design + Dino '\\\\''Rex'\\\\'', Abo-Bug-Fix \\(keine Sperre, X schliessbar\\), freier Timer + Stoppuhr, Pausen im KI-Plan, Kalender-Export \\(.ics\\), Benachrichtigungen *)"
     ]
   }
 }

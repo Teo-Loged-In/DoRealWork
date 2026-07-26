@@ -124,16 +124,24 @@ function buildRequest(type, p) {
     return { system, messages: [{ role: "user", content }], maxTokens: 900 };
   }
 
-  // ---- Fokus-Tagesplan ----
+  // ---- Fokus-Tagesplan (mit Pausen, Prioritäten, Kalender-Überlauf) ----
   if (type === "plan") {
     const system = COACH_PERSONA +
-      " Du planst den Tag in konzentrierte Deep-Work-Blöcke. Regeln: Blockgröße an Fokus-Kapazität anpassen; " +
-      "härtesten Block auf das Energie-Hoch; bei niedriger Brain-Battery (<35) kürzere Blöcke; nach jedem Block Erholung. " +
+      " Du planst den Tag in konzentrierte Deep-Work-Blöcke und ECHTE Pausen. Regeln: " +
+      "(1) Wichtigste/dringendste Aufgabe zuerst und auf das Energie-Hoch legen. " +
+      "(2) Blockgröße an die Fokus-Kapazität anpassen; bei niedriger Brain-Battery (<35) kürzere Blöcke. " +
+      "(3) Nach jedem Fokusblock eine Pause als eigenen Block mit type='break' einplanen (Wasser, Klo, Augen weg vom Screen); " +
+      "nach ~2 Blöcken eine längere Pause zum Essen (10-20 Min). " +
+      "(4) Wenn an einem Tag zu viel für die verfügbare Zeit/Energie ist, plane die Aufgaben mit NIEDRIGER Priorität nicht für heute ein, " +
+      "sondern gib sie in 'overflow' zurück, damit sie in den Kalender wandern (rückwärts von der Deadline). " +
       "Antworte AUSSCHLIESSLICH mit JSON: " +
-      '{"coachNote": string (max 2 Sätze), "blocks": [{"title": string, "minutes": number, "type": "deep"|"admin"|"creative"|"learning", "why": string}]}';
+      '{"coachNote": string (max 2 Sätze), ' +
+      '"blocks": [{"title": string, "minutes": number, "type": "deep"|"admin"|"creative"|"learning"|"break", "why": string}], ' +
+      '"overflow": [{"title": string, "minutes": number, "why": string (warum später/an welchem Tag sinnvoll)}]}';
     const user =
       `${ctxLine(p)} Chronotyp=${p.chronotype}, Fokus-Kapazität=${p.baselineMinutes} Min, ` +
-      `Brain-Battery=${p.battery}/100, Tageszeit=${p.timeOfDay}. Aufgaben: "${p.tasks}". Erstelle 2-5 Blöcke.`;
+      `Brain-Battery=${p.battery}/100, Tageszeit=${p.timeOfDay}. Aufgaben (ggf. mit Dauer/Priorität): "${p.tasks}". ` +
+      `Erstelle einen realistischen Tagesplan inkl. Pausen. Was heute nicht sinnvoll reinpasst -> overflow.`;
     return { system, messages: [{ role: "user", content: user }], expectJson: true };
   }
 
