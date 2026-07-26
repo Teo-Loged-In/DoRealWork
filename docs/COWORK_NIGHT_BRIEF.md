@@ -33,6 +33,35 @@
 10. **Bei echten Blockern** (z. B. etwas braucht den `ANTHROPIC_API_KEY` oder eine Nutzer-Entscheidung):
     NICHT raten und NICHT die App riskieren — im Progress-Log als „Offen für Teo" vermerken und mit der
     nächsten Aufgabe weitermachen.
+11. **Urheberrecht respektieren (bei der Konkurrenz-Analyse):** Aus anderen Apps nur **Muster,
+    Best-Practices und Ideen** ableiten — **niemals** Texte, Icons, Bilder, Marken, Code oder Design 1:1
+    kopieren. Alles in DoRealWorks eigener Sprache, eigenem grünen Design und mit Rex neu umsetzen.
+    Keine fremden Markennamen/Logos in die App bringen.
+
+## PHASE 0 — ZUERST: Konkurrenz-Analyse → Verbesserungs-Datei → direkt umsetzen
+
+**Bevor** du in die normale Schleife (B) gehst, führe diese Phase einmal ganz am Anfang der Nacht durch:
+
+1. **Vergleichbare Apps analysieren.** Untersuche etablierte Apps in den Bereichen, die DoRealWork
+   berührt: Ziel-/Habit-/Routine-Tracker, Fokus-/Deep-Work-Apps, KI-Coaching-/Produktivitäts-Apps,
+   Lern-Apps. (Nutze Web-Recherche, falls Tools verfügbar; sonst dein fundiertes Wissen über bekannte,
+   erfolgreiche Apps dieser Kategorien.) Schau auf: Funktionsumfang, Onboarding, UX-Muster, Monetarisierung,
+   Gamification, Design-/Professionalitäts-Niveau, Retention-Mechaniken, was Nutzer daran lieben/kritisieren.
+   **Nur Muster & Best-Practices ableiten — nichts kopieren** (siehe Pflicht-Regel 11).
+
+2. **Vollständige Verbesserungs-Datei erstellen:** `docs/IMPROVEMENT_PROPOSALS.md`. Inhalt:
+   - Kurzer Vergleich: Wo steht DoRealWork stark, wo haben andere Vorsprung?
+   - Eine **priorisierte, konkrete Vorschlagsliste** (jeweils: Was, Warum/Nutzen, wie in DoRealWork
+     umsetzen — passend zu grünem Design, Rex, No-Build-Architektur, Aufwand/Impact-Einschätzung).
+   - Klar getrennt in: **sofort umsetzbar** (heute Nacht) vs. **größer/später**.
+   - Alles muss zur Vision aus `README.md` passen und die Pflicht-Regeln (A) einhalten.
+
+3. **Committen & pushen** (die Datei allein bricht nichts) mit Progress-Eintrag.
+
+4. **Direkt danach umsetzen:** Arbeite die als „sofort umsetzbar" markierten Vorschläge aus
+   `docs/IMPROVEMENT_PROPOSALS.md` **sofort** ab — in der normalen Schleife (B), höchster Nutzen zuerst.
+   Behandle diese Vorschläge als **oberste Priorität**, noch vor dem allgemeinen Backlog (C).
+   Hake jeden umgesetzten Vorschlag in der Datei ab (✅) und verifiziere wie in D beschrieben.
 
 ## B. ARBEITSWEISE — Schleifen bis 08:00 Uhr
 
@@ -47,6 +76,10 @@ Danach sofort die nächste Iteration. **Nicht aufhören, bis es 08:00 Uhr ist** 
 vollständig + poliert ist). Immer den größten Nutzen bei geringstem Risiko zuerst.
 
 ## C. VERBESSERUNGS-BACKLOG (priorisiert)
+
+> **Reihenfolge insgesamt:** (1) Phase 0 — Konkurrenz-Analyse + `IMPROVEMENT_PROPOSALS.md`, dann die dort
+> als „sofort umsetzbar" markierten Vorschläge, (2) danach dieses P0/P1/P2-Backlog. Immer: höchster Nutzen
+> bei geringstem Risiko zuerst.
 
 ### P0 — Stabilität, Praktikabilität, Politur (zuerst, geringes Risiko)
 - **Voll-Durchlauf jeder Ansicht** (Onboarding → Account → Trial → Dashboard → Methode → Fokus → Timer →
@@ -104,6 +137,9 @@ Mindestens diese Rollen:
 3. **QA-/Bug-Agent:** Flows durchspielen, Bugs, Kanten-Fälle, Konsolenfehler, Datenverlust-Risiken finden.
 4. **Design-/Professionalitäts-Agent:** Wirkt es hochwertig und erwachsen (nicht kindisch)? Konsistenz,
    Abstände, Farbnutzung, Rex-Integration, Politur.
+5. **Benchmark-Agent (Konkurrenz):** Vergleicht den aktuellen Stand mit den in
+   `docs/IMPROVEMENT_PROPOSALS.md` analysierten Best-Practices — was von den Vorschlägen fehlt noch,
+   wo bleibt DoRealWork hinter dem Marktstandard zurück? Neue, konkrete Vorschläge in die Datei nachtragen.
 
 Regeln für die Agenten: **nur verifizierte, konkrete Findings** (Datei/Stelle + Vorschlag), nach Schwere
 sortiert. Der Orchestrator arbeitet die Findings ab, verifiziert, committet — und startet die nächste Runde.
@@ -118,6 +154,8 @@ sortiert. Der Orchestrator arbeitet die Findings ab, verifiziert, committet — 
 - Den stabilen Release-Stand `v1.0` nicht überschreiben (nur vorwärts entwickeln).
 
 ---
-**Kurzfassung:** Bis 08:00 Uhr in Schleifen (Umsetzen → selbst verifizieren → Kontroll-Agenten →
-nachbessern → grün committen) die App besser & professioneller machen. Immer lauffähig halten,
-`.nojekyll` schützen, nichts kaputt machen, jeden Schritt dokumentieren. Höchster Nutzen zuerst.
+**Kurzfassung:** ZUERST vergleichbare Apps analysieren und daraus `docs/IMPROVEMENT_PROPOSALS.md`
+erstellen, dann diese Vorschläge **direkt umsetzen**. Anschließend bis 08:00 Uhr in Schleifen
+(Umsetzen → selbst verifizieren → Kontroll-Agenten inkl. Benchmark → nachbessern → grün committen) die
+App besser & professioneller machen. Immer lauffähig halten, `.nojekyll` schützen, nichts kopieren,
+nichts kaputt machen, jeden Schritt dokumentieren. Höchster Nutzen zuerst.

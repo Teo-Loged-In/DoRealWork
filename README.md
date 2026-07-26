@@ -113,10 +113,18 @@ haben und es wirklich erreichen wollen** — egal in welcher Disziplin. Die App 
 Problem & Wirkung · Kreativität & Originalität · **Einsatz von KI & Prompting** · Produktumsetzung ·
 Qualität des Pitches · Potenzial.
 
-## 9. Weiterentwicklung über Nacht
+## 9. Weiterentwicklung über Nacht (autonom)
 Ein detaillierter, verbindlicher Arbeitsauftrag für autonome Nacht-Verbesserung (Claude Cowork) liegt in
 **[docs/COWORK_NIGHT_BRIEF.md](docs/COWORK_NIGHT_BRIEF.md)** — inkl. Pflicht-Regeln, Verbesserungs-Backlog
-und Review-Agenten-Struktur.
+und Review-Agenten-Struktur. Ablauf:
+
+1. **Phase 0 — Konkurrenz-Analyse:** Cowork analysiert vergleichbare Apps (Ziel-/Habit-/Fokus-/Coaching-Apps),
+   leitet daraus **Best-Practices** ab (ohne etwas zu kopieren) und schreibt daraus eine vollständige,
+   priorisierte Verbesserungs-Datei **`docs/IMPROVEMENT_PROPOSALS.md`**.
+2. **Direkte Umsetzung:** Die dort als „sofort umsetzbar" markierten Vorschläge werden **unmittelbar danach**
+   umgesetzt (höchste Priorität), gefolgt vom allgemeinen Backlog.
+3. **Kontroll-Agenten** (Praktikabilität, Vollständigkeit, QA/Bugs, Design, Benchmark) prüfen den Stand
+   nach jeder Iteration; der Haupt-Agent bessert nach — in Schleifen **bis 08:00 Uhr**, immer lauffähig.
 
 ---
 *Alle Prompts/Fortschritte sind in `docs/progress/` dokumentiert. Ordnerstruktur: `index.html` (App),
