@@ -21,10 +21,14 @@ dich in jeder Disziplin (Schritt-für-Schritt, Chat, sogar **Form-Check per Kame
 
 > Kernprinzip: **Ein Coach, der für dich denkt — trainiert statt trackt.**
 
+> Dein Coach heißt **Rex** 🦖 — ein Dino-Maskottchen, das dich als roter Faden durch die App begleitet.
+> Design: dunkelgrün, naturnah, professionell.
+
 ## Status
 
 🟢 **LIVE & funktionsfähig:** https://teo-loged-in.github.io/DoRealWork/ (Offline-KI-Modus)
-🟡 Nächster Schritt: Vercel-Deploy für echte Live-KI (Claude API). Siehe [Progress-Log](docs/progress/).
+🟡 **Echte Live-KI aktivieren:** Vercel-Deploy + Anthropic-Key — Schritt-für-Schritt in
+[docs/SETUP_VERCEL.md](docs/SETUP_VERCEL.md). Siehe auch [Progress-Log](docs/progress/).
 
 ## Tech (geplant)
 

@@ -12,7 +12,8 @@
       "Bash(npx -v)",
       "PowerShell($n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if \\($n\\) { node -v } else { \"no-node\" })",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Feature: Gruenes Design + Dino '\\\\''Rex'\\\\'', Abo-Bug-Fix \\(keine Sperre, X schliessbar\\), freier Timer + Stoppuhr, Pausen im KI-Plan, Kalender-Export \\(.ics\\), Benachrichtigungen *)"
+      "Bash(git commit -q -m 'Feature: Gruenes Design + Dino '\\\\''Rex'\\\\'', Abo-Bug-Fix \\(keine Sperre, X schliessbar\\), freier Timer + Stoppuhr, Pausen im KI-Plan, Kalender-Export \\(.ics\\), Benachrichtigungen *)",
+      "Bash(git commit -q -m 'Docs: Progress 06 + Vercel-Setup-Anleitung + README \\(Rex/Live-KI\\) *)"
     ]
   }
 }
