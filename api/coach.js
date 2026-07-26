@@ -163,6 +163,25 @@ function buildRequest(type, p) {
     return { system, messages: [{ role: "user", content: user }], expectJson: true };
   }
 
+  // ---- Routine/Habit optimieren ----
+  if (type === "habit") {
+    const h = p.habit || {};
+    const system = COACH_PERSONA +
+      " Du optimierst eine Routine/Gewohnheit des Nutzers. Zeige, wie sie GERADE ist und wie die OPTIMIERTE " +
+      "Version aussieht (effizienter, gesünder, mit größerem Effekt fürs Ziel), was konkret anders ist, welche " +
+      "Produkte/Hilfsmittel dabei helfen (nur wirklich sinnvolle, mit kurzer Begründung) und warum es besser ist. " +
+      "Konkret, ehrlich, umsetzbar. Antworte AUSSCHLIESSLICH mit JSON: " +
+      '{"current": string (1-2 Sätze, die aktuelle Routine zusammengefasst), ' +
+      '"optimized": string (die verbesserte Version, konkret), ' +
+      '"changes": [string] (die wichtigsten Änderungen, je kurz), ' +
+      '"products": [{"name": string, "why": string}] (0-4 sinnvolle Hilfsmittel), ' +
+      '"whyBetter": string (1-2 Sätze, warum das messbar besser ist)}';
+    const user =
+      `${ctxLine(p)}\nRoutine: Name="${h.name || "?"}", Dauer=${h.minutes || "?"} Min. ` +
+      `Was gemacht wird="${h.what || "?"}". Warum="${h.why || "?"}". Optimiere sie.`;
+    return { system, messages: [{ role: "user", content: user }], expectJson: true };
+  }
+
   // ---- Session-Debrief ----
   if (type === "debrief") {
     const system = COACH_PERSONA +

@@ -24,7 +24,16 @@
       "Bash(git commit -q -m 'Feature: Multi-Ziel mit Chrome-artigen Tabs \\(jedes Ziel eigener Coaching-Bereich\\); neues Ziel via + \\(Starter-Onboarding\\); Ziel abhaken -> Reward + Liste erreichter Ziele; Auto-Migration alter Einzel-Ziel-Daten *)",
       "Bash(rm -f check_*.html _verify_*.html)",
       "Bash(git commit *)",
-      "Bash(git commit -q -m 'Docs: Progress 09 \\(Multi-Ziel-Tabs\\) *)"
+      "Bash(git commit -q -m 'Docs: Progress 09 \\(Multi-Ziel-Tabs\\) *)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(git fetch *)",
+      "Bash(touch .nojekyll)",
+      "Bash(git commit -q -m 'Fix: .nojekyll ergaenzt -> GitHub Pages Jekyll-Build abgeschaltet \\(React {{ }} brach Build\\); Live-Deploy funktioniert wieder *)",
+      "Bash(curl -s \"https://teo-loged-in.github.io/DoRealWork/index.html?cb=$\\(date +%s\\)\" -H \"Cache-Control: no-cache\")",
+      "Read(//tmp/**)",
+      "Bash(rm -f verify_*.html _verify_*.html check_*.html)",
+      "Bash(git commit -q -m 'Feature: Routinen/Habits mit KI-Optimierung \\(Jetzt vs Optimiert, Aenderungen, Produkte, Warum-besser\\); Konto-/Einstellungen-Avatar oben \\(Initialen\\); Zurueck-Pfeile ueberall \\(BackBar\\); Fix Focus-Props \\(updateLog/onBack\\) *)"
     ]
   }
 }

@@ -221,7 +221,7 @@ async function askCoach(type, payload) {
     const data = await r.json();
     if (data && data.ok && data.result) return { source: 'ai', ...data.result };
   } catch (_) {}
-  const fb = { plan: localPlan, debrief: localDebrief, methods: localMethods, approach: localApproach, chat: localChat, formcheck: localFormcheck }[type];
+  const fb = { plan: localPlan, debrief: localDebrief, methods: localMethods, approach: localApproach, chat: localChat, formcheck: localFormcheck, habit: localHabit }[type];
   return { source: 'local', ...(fb ? fb(payload) : {}) };
 }
 
@@ -340,6 +340,17 @@ function localDebrief(p) {
   else { insight = 'Solide Session mit Luft nach oben.'; adjustment = 'Setz dir vor dem Block eine glasklare Mini-Intention.'; }
   return { insight, adjustment, encouragement: 'Fokus ist ein Muskel — heute trainiert. 💪' };
 }
+function localHabit(p) {
+  const h = p.habit || {};
+  return {
+    current: `${h.name || 'Deine Routine'} (${h.minutes || '?'} Min): ${h.what || '—'}.`,
+    optimized: 'Feste Reihenfolge, Wichtigstes zuerst, Zeitfresser (z. B. Handy) raus. Gleicher Nutzen in weniger Zeit — mit klarem Ablauf und einem festen Startpunkt.',
+    changes: ['Handy erst NACH der Routine', 'Wichtigsten Schritt an den Anfang', 'Feste Uhrzeit & Reihenfolge', 'Kleiner Start-Trigger (z. B. ein Glas Wasser)'],
+    products: [{ name: 'Timer / Wecker', why: 'feste Zeiten halten ohne aufs Handy zu schauen' }, { name: 'Notizbuch', why: 'kurz festhalten und dranbleiben' }],
+    whyBetter: 'Weniger Reibung und klare Reihenfolge = du ziehst die Routine zuverlässiger durch und sparst Zeit.',
+    source: 'local',
+  };
+}
 
 /* ============================ Brain Battery ============================ */
 function computeBatteryStart(sleepQuality, prevEnd) {
@@ -401,6 +412,7 @@ function App() {
   const [sub, setSub] = useState(() => LS.get('drw_sub', null));
   const [authEmail, setAuthEmail] = useState(() => LS.get('drw_authEmail', null));
   const [authName, setAuthName] = useState(() => LS.get('drw_authName', ''));
+  const [habits, setHabits] = useState(() => LS.get('drw_habits', []));
   const [view, setView] = useState('dashboard');
   const [activeMethodId, setActiveMethodId] = useState(null);
   const [overlay, setOverlay] = useState(null);
@@ -414,6 +426,7 @@ function App() {
   useEffect(() => LS.set('drw_sub', sub), [sub]);
   useEffect(() => LS.set('drw_authEmail', authEmail), [authEmail]);
   useEffect(() => LS.set('drw_authName', authName), [authName]);
+  useEffect(() => LS.set('drw_habits', habits), [habits]);
 
   const activeList = goals.filter(g => g.status !== 'done');
   const doneList = goals.filter(g => g.status === 'done');
@@ -519,12 +532,13 @@ function App() {
       {/* Main */}
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
         {/* Chrome-artige Ziel-Tabs oben */}
-        <GoalTabs goals={activeList} activeId={active.id} onSwitch={switchGoal} onNew={() => setCreatingGoal(true)} doneCount={doneList.length} onShowCompleted={() => setShowCompleted(true)} />
+        <GoalTabs goals={activeList} activeId={active.id} onSwitch={switchGoal} onNew={() => setCreatingGoal(true)} doneCount={doneList.length} onShowCompleted={() => setShowCompleted(true)} name={authName} onAccount={() => nav('account')} />
         <TrialBanner sub={sub} onManage={() => nav('account')} onUpgrade={() => setShowPaywall(true)} />
         {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onComplete={() => completeGoal(active.id)} onReset={() => { ['drw_goals','drw_activeGoalId','drw_profile','drw_coach','drw_assistant','drw_state','drw_sub','drw_authEmail','drw_authName'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
         {view === 'method' && activeMethod && <MethodDetail method={activeMethod} profile={profile} coach={coach} setCoach={setCoach} onBack={() => setView('dashboard')} />}
-        {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} updateLog={updateLog} />}
-        {view === 'insights' && <Insights state={state} />}
+        {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} updateLog={updateLog} onBack={() => nav('dashboard')} />}
+        {view === 'habits' && <Habits habits={habits} setHabits={setHabits} profile={profile} onBack={() => nav('dashboard')} />}
+        {view === 'insights' && <Insights state={state} onBack={() => nav('dashboard')} />}
         {view === 'account' && <AccountScreen sub={sub} setSub={setSub} account={authEmail} onLogout={() => { setAuthEmail(null); nav('dashboard'); }} onBack={() => nav('dashboard')} />}
         {view === 'assistant' && <div className="lg:hidden h-[calc(100vh-6rem)]"><Assistant profile={profile} coach={coach} state={state} messages={assistant} setMessages={setAssistant} /></div>}
       </main>
@@ -537,7 +551,8 @@ function App() {
 /* ============================ Ziel-Tabs (Chrome-artig) ============================ */
 const goalIcon = goal => { const d = goalDomain(goal); return { fitness: '💪', business: '🚀', learning: '📚', health: '🧘', general: '🎯' }[d] || '🎯'; };
 const shortGoal = g => { const s = String(g || 'Ziel').trim(); return s.length > 20 ? s.slice(0, 20) + '…' : s; };
-function GoalTabs({ goals, activeId, onSwitch, onNew, doneCount, onShowCompleted }) {
+const initials = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+function GoalTabs({ goals, activeId, onSwitch, onNew, doneCount, onShowCompleted, name, onAccount }) {
   return (
     <div className="sticky top-0 z-40 flex items-stretch gap-1 px-2 pt-2 bg-black/60 backdrop-blur border-b border-white/10 overflow-x-auto">
       {goals.map(g => {
@@ -552,6 +567,8 @@ function GoalTabs({ goals, activeId, onSwitch, onNew, doneCount, onShowCompleted
       <button onClick={onNew} title="Neues Ziel" className="shrink-0 w-9 my-1 rounded-lg bg-white/5 border border-white/10 hover:border-emerald-400/50 grid place-items-center text-emerald-300 text-lg">＋</button>
       <div className="flex-1" />
       {doneCount > 0 && <button onClick={onShowCompleted} title="Erreichte Ziele" className="shrink-0 my-1 px-3 rounded-lg bg-white/5 border border-white/10 hover:border-amber-400/40 text-sm text-amber-200 flex items-center gap-1">🏆 {doneCount}</button>}
+      {/* Account/Einstellungen – Kreis mit Initialen */}
+      <button onClick={onAccount} title="Konto & Einstellungen" className="shrink-0 my-1 ml-1 w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-400/40 hover:border-emerald-300 grid place-items-center text-sm font-bold text-emerald-100">{initials(name)}</button>
     </div>
   );
 }
@@ -643,7 +660,7 @@ function Brand() {
     </div>
   );
 }
-const NAV = [{ id: 'dashboard', icon: '🎯', label: 'Ziel & Methoden' }, { id: 'focus', icon: '🔒', label: 'Fokus' }, { id: 'insights', icon: '📈', label: 'Fortschritt' }];
+const NAV = [{ id: 'dashboard', icon: '🎯', label: 'Ziel & Methoden' }, { id: 'focus', icon: '🔒', label: 'Fokus' }, { id: 'habits', icon: '🔁', label: 'Routinen' }, { id: 'insights', icon: '📈', label: 'Fortschritt' }];
 function NavLinks({ view, nav }) {
   return (
     <nav className="px-3 space-y-1">
@@ -796,7 +813,7 @@ function MethodDetail({ method, profile, coach, setCoach, onBack }) {
 
   return (
     <div className="max-w-3xl mx-auto px-5 pt-8">
-      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white mb-4">← Zurück zu den Methoden</button>
+      <BackBar onBack={onBack} title="Zurück zu den Methoden" />
       <div className="flex items-center gap-3 mb-1"><span className="text-3xl">{method.icon}</span><h1 className="text-2xl font-extrabold">{method.title}</h1></div>
       <p className="text-zinc-400 text-sm mb-6">{method.summary}</p>
 
@@ -990,7 +1007,7 @@ function ChatInput({ input, setInput, onSend, busy, attachments = [], onFiles, o
 }
 
 /* ============================ Focus (Planner + Battery) ============================ */
-function Focus({ profile, state, patch, onStart, onSkip }) {
+function Focus({ profile, state, patch, onStart, onSkip, updateLog, onBack }) {
   const [tasks, setTasks] = useState('');
   const [loading, setLoading] = useState(false);
   const [coachNote, setCoachNote] = useState('');
@@ -1024,7 +1041,8 @@ function Focus({ profile, state, patch, onStart, onSkip }) {
   async function toggleNotify() { const ok = await ensureNotify(); setNotifyOn(ok); if (ok) notify('🔔 Erinnerungen an', 'Rex meldet sich, wenn ein Block fertig ist.'); }
 
   return (
-    <div className="max-w-2xl mx-auto px-5 pt-8">
+    <div className="max-w-2xl mx-auto px-5 pt-6">
+      <BackBar onBack={onBack} />
       <div className="flex items-center justify-between mb-5"><div><div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold">{timeOfDay()} · {profile.chronotype}-Typ</div><h1 className="text-2xl font-extrabold">Fokus</h1></div><Streak n={state.streak} /></div>
       <BrainBattery battery={state.battery} sleepQuality={state.sleepQuality} onSleep={q => patch({ battery: computeBatteryStart(q, null), sleepQuality: q })} />
 
@@ -1248,8 +1266,96 @@ function Debrief({ session, profile, state, onDone, onRate }) {
   );
 }
 
+/* ============================ Zurück-Leiste (überall oben links) ============================ */
+function BackBar({ onBack, title }) {
+  if (!onBack) return null;
+  return (
+    <button onClick={onBack} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4">
+      <span className="w-8 h-8 rounded-full bg-white/5 border border-white/10 grid place-items-center text-base group-hover:border-white/30">←</span>
+      {title || 'Zurück'}
+    </button>
+  );
+}
+
+/* ============================ Routinen / Habits (mit KI-Optimierung) ============================ */
+function Habits({ habits, setHabits, profile, onBack }) {
+  const [form, setForm] = useState({ name: '', what: '', why: '', minutes: 15 });
+  const [busyId, setBusyId] = useState(null);
+  const valid = form.name.trim().length > 1;
+
+  function add() {
+    if (!valid) return;
+    const h = { id: uid(), name: form.name.trim(), what: form.what.trim(), why: form.why.trim(), minutes: clamp(+form.minutes || 10, 1, 600), createdAt: new Date().toISOString(), opt: null };
+    setHabits([h, ...habits]);
+    setForm({ name: '', what: '', why: '', minutes: 15 });
+  }
+  const remove = id => setHabits(habits.filter(h => h.id !== id));
+  async function optimize(h) {
+    setBusyId(h.id);
+    const res = await askCoach('habit', { name: profile && profile.name, goal: profile && profile.goal, habit: { name: h.name, what: h.what, why: h.why, minutes: h.minutes } });
+    setHabits(hs => hs.map(x => x.id === h.id ? { ...x, opt: res } : x));
+    setBusyId(null);
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6">
+      <BackBar onBack={onBack} />
+      <div className="flex items-center gap-2 mb-1"><span className="text-2xl">🔁</span><h1 className="text-2xl font-extrabold">Routinen & Gewohnheiten</h1></div>
+      <p className="text-sm text-zinc-400 mb-5">Trag deine Routinen ein — Rex zeigt dir die optimierte Version, was anders wäre und was du dafür brauchst.</p>
+
+      {/* Neue Routine */}
+      <div className="glass rounded-2xl p-4 mb-6">
+        <div className="text-sm font-semibold mb-3">Neue Routine hinzufügen</div>
+        <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Name — z. B. Morgenroutine" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm outline-none focus:border-emerald-400/60 mb-2" />
+        <textarea value={form.what} onChange={e => setForm({ ...form, what: e.target.value })} rows={2} placeholder="Was machst du dabei? z. B. Aufstehen, Handy checken, Kaffee, duschen" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm outline-none focus:border-emerald-400/60 mb-2 resize-none" />
+        <input value={form.why} onChange={e => setForm({ ...form, why: e.target.value })} placeholder="Warum machst du sie? z. B. wach werden & fokussiert starten" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm outline-none focus:border-emerald-400/60 mb-2" />
+        <div className="flex items-center gap-2 mb-3"><span className="text-sm text-zinc-400">Dauer:</span><input type="number" min="1" max="600" value={form.minutes} onChange={e => setForm({ ...form, minutes: e.target.value })} className="w-20 rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-sm text-center outline-none focus:border-emerald-400/60" /><span className="text-sm text-zinc-500">Min</span></div>
+        <button onClick={add} disabled={!valid} className={'w-full py-2.5 rounded-xl font-semibold text-white text-sm transition ' + (valid ? 'btn-primary' : 'bg-white/5 text-zinc-500')}>＋ Routine speichern</button>
+      </div>
+
+      {habits.length === 0 ? (
+        <div className="text-center text-zinc-500 text-sm mt-8"><div className="text-4xl mb-2 animate-floaty">🔁</div>Noch keine Routine. Trag deine erste ein und lass sie von Rex optimieren.</div>
+      ) : (
+        <div className="space-y-4">{habits.map(h => <HabitCard key={h.id} h={h} busy={busyId === h.id} onOptimize={() => optimize(h)} onRemove={() => remove(h.id)} />)}</div>
+      )}
+    </div>
+  );
+}
+function HabitCard({ h, busy, onOptimize, onRemove }) {
+  return (
+    <div className="glass rounded-2xl p-4 animate-fadeUp">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold flex items-center gap-2">🔁 {h.name} <span className="text-xs font-normal text-zinc-500">· {h.minutes} Min</span></div>
+          {h.what && <div className="text-sm text-zinc-300 mt-1">{h.what}</div>}
+          {h.why && <div className="text-xs text-zinc-500 mt-0.5 italic">Warum: {h.why}</div>}
+        </div>
+        <button onClick={onRemove} className="shrink-0 text-xs text-zinc-500 hover:text-red-300">löschen</button>
+      </div>
+      <button onClick={onOptimize} disabled={busy} className={'w-full mt-3 py-2.5 rounded-xl font-semibold text-white text-sm transition ' + (busy ? 'bg-white/5 text-zinc-500' : 'btn-primary')}>{busy ? 'Rex optimiert…' : (h.opt ? '↻ Neu optimieren' : '🦖 Von Rex optimieren lassen')}</button>
+
+      {h.opt && (
+        <div className="mt-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3"><div className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Jetzt</div><div className="text-sm text-zinc-300">{h.opt.current || '—'}</div></div>
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-3"><div className="text-[11px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">Optimiert ✨</div><div className="text-sm text-emerald-100/90">{h.opt.optimized || '—'}</div></div>
+          </div>
+          {Array.isArray(h.opt.changes) && h.opt.changes.length > 0 && (
+            <div><div className="text-xs font-semibold text-zinc-300 mb-1">Was ändert sich?</div><ul className="space-y-1">{h.opt.changes.map((c, i) => <li key={i} className="text-sm text-zinc-300 flex gap-2"><span className="text-emerald-400">✓</span><span>{c}</span></li>)}</ul></div>
+          )}
+          {Array.isArray(h.opt.products) && h.opt.products.length > 0 && (
+            <div><div className="text-xs font-semibold text-zinc-300 mb-1">🛒 Das brauchst du dafür</div><div className="space-y-1.5">{h.opt.products.map((p, i) => <div key={i} className="text-sm text-zinc-300 flex gap-2"><span className="text-lime-300">•</span><span><b>{p.name}</b>{p.why ? <span className="text-zinc-500"> — {p.why}</span> : ''}</span></div>)}</div></div>
+          )}
+          {h.opt.whyBetter && <div className="rounded-xl bg-white/5 border-l-2 border-l-emerald-400/70 p-3"><div className="text-xs text-emerald-300/80 font-semibold mb-1">Warum das besser ist</div><div className="text-sm text-zinc-200">{h.opt.whyBetter}</div></div>}
+          {h.opt.source === 'local' && <div className="text-[11px] text-zinc-500">Offline-Vorschlag — mit Live-KI wird die Optimierung individuell & viel genauer.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============================ Insights ============================ */
-function Insights({ state }) {
+function Insights({ state, onBack }) {
   const hist = state.history || [];
   const today = { date: todayStr(), focusMinutes: state.blocks.filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0) };
   const series = [...hist, today].slice(-10);
@@ -1258,7 +1364,8 @@ function Insights({ state }) {
   const distr = {}; [...(state.blocks || [])].flatMap(b => b.distractions || []).forEach(d => distr[d.type] = (distr[d.type] || 0) + 1);
   const topDistr = Object.entries(distr).sort((a, b) => b[1] - a[1]).slice(0, 4);
   return (
-    <div className="max-w-2xl mx-auto px-5 pt-8">
+    <div className="max-w-2xl mx-auto px-5 pt-6">
+      <BackBar onBack={onBack} />
       <h1 className="text-2xl font-extrabold mb-6">Dein Fortschritt</h1>
       <div className="grid grid-cols-3 gap-3 mb-6"><Stat label="Streak" value={state.streak} suffix="🔥" /><Stat label="Fokus gesamt" value={totalMin} suffix="min" /><Stat label="Ø / Tag" value={series.length ? Math.round(totalMin / series.length) : 0} suffix="min" /></div>
       <div className="glass rounded-3xl p-5 mb-6"><h3 className="font-bold mb-4">Fokus-Minuten pro Tag</h3><div className="flex items-end gap-2 h-40">{series.map((s, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full rounded-t-lg btn-primary" style={{ height: `${(s.focusMinutes / maxM) * 100}%`, minHeight: s.focusMinutes ? '4px' : '0' }} title={`${s.focusMinutes} min`}></div><div className="text-[9px] text-zinc-600">{s.date.slice(5)}</div></div>)}</div><p className="text-xs text-zinc-500 mt-3">Deine Fokus-Kapazität wächst mit jedem Block — Training, kein Tracking.</p></div>
@@ -1442,9 +1549,9 @@ function AccountScreen({ sub, setSub, account, onLogout, onBack }) {
   const st = subState(sub);
   const [plan, setPlan] = useState(sub.plan || 'yearly');
   return (
-    <div className="max-w-lg mx-auto px-5 pt-8">
-      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white mb-4">← Zurück</button>
-      <h1 className="text-2xl font-extrabold mb-6">Dein Konto</h1>
+    <div className="max-w-lg mx-auto px-5 pt-6">
+      <BackBar onBack={onBack} />
+      <h1 className="text-2xl font-extrabold mb-6">Konto & Einstellungen</h1>
 
       <div className="glass rounded-2xl p-5 mb-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -1473,6 +1580,17 @@ function AccountScreen({ sub, setSub, account, onLogout, onBack }) {
       {st === 'active' && (
         <button onClick={() => setSub({ ...sub, status: 'free', canceledAt: new Date().toISOString() })} className="w-full py-3 rounded-2xl bg-white/5 border border-white/10 hover:border-red-400/40 text-sm text-zinc-300 mb-6">Abo kündigen (du behältst die Gratis-Version)</button>
       )}
+
+      {/* Einstellungen – Grundgerüst, wird noch mit konkreten Optionen gefüllt */}
+      <div className="glass rounded-2xl p-5 mb-6">
+        <h2 className="font-bold mb-3 flex items-center gap-2">⚙️ Einstellungen</h2>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-4 py-3"><span className="text-sm">🔔 Benachrichtigungen</span><button onClick={async () => { await ensureNotify(); }} className="text-xs text-emerald-300 hover:text-white">aktivieren</button></div>
+          <div className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-4 py-3 opacity-70"><span className="text-sm">🌍 Sprache</span><span className="text-xs text-zinc-500">folgt</span></div>
+          <div className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-4 py-3 opacity-70"><span className="text-sm">🎨 Design</span><span className="text-xs text-zinc-500">folgt</span></div>
+        </div>
+        <p className="text-[11px] text-zinc-500 mt-3">Weitere Einstellungen kommen hierher.</p>
+      </div>
 
       <div className="glass rounded-2xl p-4 opacity-80">
         <div className="text-xs text-zinc-500 mb-2">🧪 Demo-Werkzeuge (nur zum Testen des Ablaufs)</div>
