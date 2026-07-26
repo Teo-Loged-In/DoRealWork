@@ -359,60 +359,120 @@ function ChatText({ text }) {
   return <div className="prose-chat text-sm leading-relaxed">{String(text).split(/\n{2,}/).map((para, i) => <p key={i}>{para.split('\n').map((line, j) => <React.Fragment key={j}>{j > 0 && <br />}{mdInline(line)}</React.Fragment>)}</p>)}</div>;
 }
 
+/* ============================ Ziel-Workspaces (Multi-Goal) ============================ */
+function freshState() { return { day: todayStr(), battery: 80, sleepQuality: null, blocks: [], streak: 0, lastActiveDay: null, history: [], log: [] }; }
+function rollDailyState(s) {
+  const t = todayStr();
+  if (!s) return freshState();
+  if (s.day !== t) {
+    const prevFocus = (s.blocks || []).filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0);
+    const ratings = (s.blocks || []).filter(b => b.focusRating).map(b => b.focusRating);
+    const avg = ratings.length ? ratings.reduce((a, c) => a + c, 0) / ratings.length : 0;
+    const history = [...(s.history || []), { date: s.day, focusMinutes: prevFocus, avgRating: +avg.toFixed(1), distractions: (s.blocks || []).reduce((a, b) => a + (b.distractions ? b.distractions.length : 0), 0), batteryEnd: s.battery }].slice(-30);
+    return { day: t, battery: computeBatteryStart(null, s.battery), sleepQuality: null, blocks: [], streak: s.streak || 0, lastActiveDay: s.lastActiveDay, history, log: s.log || [] };
+  }
+  return { ...s, log: s.log || [] };
+}
+// Lädt alle Ziele; migriert alte Einzel-Ziel-Daten automatisch in ein Ziel.
+function loadGoals() {
+  const g = LS.get('drw_goals', null);
+  if (g && Array.isArray(g)) return g.map(x => ({ ...x, state: rollDailyState(x.state) }));
+  const p = LS.get('drw_profile', null);
+  if (p) return [{ id: uid(), profile: p, coach: LS.get('drw_coach', null), state: rollDailyState(LS.get('drw_state', null)), assistant: LS.get('drw_assistant', []), status: 'active', createdAt: new Date().toISOString() }];
+  return [];
+}
+// Belohnungen beim Zielerreichen (steigern sich mit der Anzahl erreichter Ziele)
+const REWARDS = [
+  { emoji: '🌱', title: 'Erster Meilenstein', msg: 'Dein erstes Ziel ist erreicht — der schwerste Schritt ist getan!' },
+  { emoji: '🔥', title: 'Auf der Jagd', msg: 'Zwei Ziele erreicht. Du baust echtes Momentum auf.' },
+  { emoji: '⚡', title: 'Unaufhaltsam', msg: 'Drei Ziele! Rex ist beeindruckt.' },
+  { emoji: '🏆', title: 'Zielcrusher', msg: 'Vier Ziele erreicht — das ist Champion-Niveau.' },
+  { emoji: '🦖', title: 'Apex Predator', msg: 'Fünf+ Ziele. Du bist an der Spitze der Nahrungskette.' },
+];
+const pickReward = n => REWARDS[Math.min(n, REWARDS.length - 1)];
+
 /* ============================ Root App ============================ */
 function App() {
-  const [profile, setProfile] = useState(() => LS.get('drw_profile', null));
+  const [goals, setGoals] = useState(loadGoals);
+  const [activeGoalId, setActiveGoalId] = useState(() => LS.get('drw_activeGoalId', null));
+  const [creatingGoal, setCreatingGoal] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [rewardModal, setRewardModal] = useState(null);
   const [sub, setSub] = useState(() => LS.get('drw_sub', null));
-  const [coach, setCoach] = useState(() => LS.get('drw_coach', null));
-  const [assistant, setAssistant] = useState(() => LS.get('drw_assistant', []));
   const [authEmail, setAuthEmail] = useState(() => LS.get('drw_authEmail', null));
   const [authName, setAuthName] = useState(() => LS.get('drw_authName', ''));
-  const [state, setState] = useState(() => freshOrLoad());
-  const [view, setView] = useState('dashboard');     // dashboard | method | focus | insights | assistant(mobile)
+  const [view, setView] = useState('dashboard');
   const [activeMethodId, setActiveMethodId] = useState(null);
-  const [overlay, setOverlay] = useState(null);       // session | debrief
+  const [overlay, setOverlay] = useState(null);
   const [activeBlock, setActiveBlock] = useState(null);
   const [lastSession, setLastSession] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const subscribe = plan => { setSub(s => ({ ...(s || {}), status: 'active', plan, trialStart: (s && s.trialStart) || new Date().toISOString(), activatedAt: new Date().toISOString() })); setShowPaywall(false); };
 
-  useEffect(() => LS.set('drw_profile', profile), [profile]);
+  useEffect(() => LS.set('drw_goals', goals), [goals]);
+  useEffect(() => LS.set('drw_activeGoalId', activeGoalId), [activeGoalId]);
   useEffect(() => LS.set('drw_sub', sub), [sub]);
-  useEffect(() => LS.set('drw_coach', coach), [coach]);
-  useEffect(() => LS.set('drw_assistant', assistant), [assistant]);
   useEffect(() => LS.set('drw_authEmail', authEmail), [authEmail]);
   useEffect(() => LS.set('drw_authName', authName), [authName]);
-  useEffect(() => LS.set('drw_state', state), [state]);
-  useEffect(() => { if (profile && (!coach || !coach.methods)) generateMethods(profile); }, []);
 
-  function freshOrLoad() {
-    const s = LS.get('drw_state', null); const t = todayStr();
-    if (!s) return { day: t, battery: 80, sleepQuality: null, blocks: [], streak: 0, lastActiveDay: null, history: [], log: [] };
-    if (s.day !== t) {
-      const prevFocus = (s.blocks || []).filter(b => b.status === 'done').reduce((a, b) => a + (b.actual || b.minutes), 0);
-      const ratings = (s.blocks || []).filter(b => b.focusRating).map(b => b.focusRating);
-      const avg = ratings.length ? ratings.reduce((a, c) => a + c, 0) / ratings.length : 0;
-      const history = [...(s.history || []), { date: s.day, focusMinutes: prevFocus, avgRating: +avg.toFixed(1), distractions: (s.blocks || []).reduce((a, b) => a + (b.distractions ? b.distractions.length : 0), 0), batteryEnd: s.battery }].slice(-30);
-      // Journal (log) bleibt tageübergreifend erhalten
-      return { day: t, battery: computeBatteryStart(null, s.battery), sleepQuality: null, blocks: [], streak: s.streak || 0, lastActiveDay: s.lastActiveDay, history, log: s.log || [] };
-    }
-    return { ...s, log: s.log || [] };
-  }
+  const activeList = goals.filter(g => g.status !== 'done');
+  const doneList = goals.filter(g => g.status === 'done');
+  let active = goals.find(g => g.id === activeGoalId && g.status !== 'done');
+  if (!active) active = activeList[0] || null;
 
-  if (!profile) return <Onboarding onDone={async p => { setProfile(p); await generateMethods(p); }} />;
+  // Aktives Ziel abgeleitet → Kinder-Komponenten bleiben unverändert
+  const profile = active ? active.profile : null;
+  const coach = active ? active.coach : null;
+  const state = active ? active.state : null;
+  const assistant = active ? active.assistant : [];
 
-  // Nach dem Onboarding: eigenen Account erstellen / einloggen (Name + E-Mail + Passwort)
-  if (!authEmail) return <Auth profile={profile} onAuthed={(email, name) => { setAuthEmail(email); setAuthName(name || ''); if (name) setProfile(p => ({ ...(p || {}), name })); }} />;
+  const setGoalField = (id, key, up) => setGoals(gs => gs.map(g => g.id === id ? { ...g, [key]: (typeof up === 'function' ? up(g[key]) : up) } : g));
+  const setProfile = up => active && setGoalField(active.id, 'profile', up);
+  const setCoach = up => active && setGoalField(active.id, 'coach', up);
+  const setState = up => active && setGoalField(active.id, 'state', up);
+  const setAssistant = up => active && setGoalField(active.id, 'assistant', up);
 
-  // Abo-Gate: nach dem Account einmal den Trial-Start zeigen. DANACH ist die App IMMER nutzbar
-  // (Gratis-Version). Die Paywall ist nur noch ein schließbares Upgrade-Overlay – keine Sperre mehr.
-  if (!sub || sub.status === 'none') return <TrialStart profile={profile} account={authEmail} onStart={email => setSub({ status: 'trial', trialStart: new Date().toISOString(), email: email || authEmail || null, plan: null })} />;
-
-  async function generateMethods(p) {
-    setCoach(c => ({ ...(c || {}), loading: true }));
+  async function generateMethodsFor(goalId, p) {
+    setGoalField(goalId, 'coach', c => ({ ...(c || {}), loading: true }));
     const res = await askCoach('methods', { name: p.name, goal: p.goal, stoerfaktor: p.stoerfaktor, hindernis: p.hindernis });
-    setCoach({ intro: res.intro || '', methods: (res.methods || []).map(m => ({ ...m, id: uid() })), blockerHelp: res.blockerHelp || '', approaches: {}, threads: {}, captures: {}, source: res.source, loading: false });
+    setGoalField(goalId, 'coach', { intro: res.intro || '', methods: (res.methods || []).map(m => ({ ...m, id: uid() })), blockerHelp: res.blockerHelp || '', approaches: {}, threads: {}, captures: {}, source: res.source, loading: false });
   }
+  const generateMethods = p => active && generateMethodsFor(active.id, p);
+
+  // Methoden automatisch generieren, wenn ein Ziel (neu/gewechselt) noch keine hat
+  useEffect(() => {
+    if (active && active.profile && (!active.coach || !active.coach.methods) && !(active.coach && active.coach.loading)) generateMethodsFor(active.id, active.profile);
+  }, [active && active.id]);
+
+  function createGoal(p, makeActive = true) {
+    const id = uid();
+    const withName = { ...p, name: p.name || authName || '' };
+    const g = { id, profile: withName, coach: null, state: freshState(), assistant: [], status: 'active', createdAt: new Date().toISOString() };
+    setGoals(gs => [...gs, g]);
+    if (makeActive) { setActiveGoalId(id); setView('dashboard'); }
+    setCreatingGoal(false);
+    generateMethodsFor(id, withName);
+  }
+  function completeGoal(id) {
+    const g = goals.find(x => x.id === id); if (!g) return;
+    const reward = pickReward(doneList.length);
+    setGoals(gs => gs.map(x => x.id === id ? { ...x, status: 'done', doneAt: new Date().toISOString(), reward } : x));
+    const nextActive = goals.find(x => x.status !== 'done' && x.id !== id);
+    setActiveGoalId(nextActive ? nextActive.id : null);
+    setView('dashboard');
+    setRewardModal({ goal: g, reward });
+  }
+  function reopenGoal(id) { setGoals(gs => gs.map(x => x.id === id ? { ...x, status: 'active', doneAt: null } : x)); setActiveGoalId(id); setShowCompleted(false); setView('dashboard'); }
+
+  // ---- Gate-Reihenfolge ----
+  if (goals.length === 0) return <Onboarding onDone={p => createGoal(p, true)} />;
+  if (!authEmail) return <Auth profile={goals[0].profile} onAuthed={(email, name) => { setAuthEmail(email); setAuthName(name || ''); if (name) setGoals(gs => gs.map(g => ({ ...g, profile: { ...g.profile, name } }))); }} />;
+  if (!sub || sub.status === 'none') return <TrialStart profile={goals[0].profile} account={authEmail} onStart={email => setSub({ status: 'trial', trialStart: new Date().toISOString(), email: email || authEmail || null, plan: null })} />;
+  if (creatingGoal) return <Onboarding isNew name={authName} onCancel={activeList.length ? () => setCreatingGoal(false) : null} onDone={p => createGoal(p, true)} />;
+  if (!active) return (<>
+    {rewardModal && <RewardModal data={rewardModal} name={authName} onClose={() => setRewardModal(null)} />}
+    <GoalsHub doneList={doneList} name={authName} onNew={() => setCreatingGoal(true)} onReopen={reopenGoal} />
+  </>);
 
   const patch = up => setState(s => ({ ...s, ...up }));
   const startBlock = b => { setActiveBlock(b); setOverlay('session'); };
@@ -424,7 +484,6 @@ function App() {
       const battery = clamp(s.battery - drain, 0, 100);
       const doneToday = blocks.filter(b => b.status === 'done').length;
       const streak = s.lastActiveDay === todayStr() ? s.streak : (doneToday >= 1 ? (s.streak || 0) + 1 : s.streak);
-      // Journal-Eintrag: Datum/Uhrzeit, Dauer, Was, Bewertung (folgt im Debrief), Notizen
       const entry = { id: logId, title: block.title, type: block.type || 'deep', planned: block.minutes, actual: result.actual, distractions: result.distractions || [], doneAt: new Date().toISOString(), rating: 0, notes: '' };
       const log = [entry, ...(s.log || [])].slice(0, 200);
       return { ...s, blocks, battery, streak, lastActiveDay: todayStr(), log };
@@ -436,11 +495,11 @@ function App() {
 
   const activeMethod = coach && coach.methods ? coach.methods.find(m => m.id === activeMethodId) : null;
 
-  // Overlays (Vollbild)
   if (overlay === 'session' && activeBlock) return <Session block={activeBlock} battery={state.battery} profile={profile} onFinish={finishBlock} onRecharge={a => patch({ battery: clamp(state.battery + a, 0, 100) })} onExit={() => setOverlay(null)} />;
   if (overlay === 'debrief' && lastSession) return <Debrief session={lastSession} profile={profile} state={state} onDone={() => setOverlay(null)} onRate={r => updateLog(lastSession.logId, { rating: r })} />;
 
   const nav = (v) => { setView(v); };
+  const switchGoal = id => { setActiveGoalId(id); setView('dashboard'); setActiveMethodId(null); };
 
   return (
     <div className="min-h-screen ambient lg:flex">
@@ -453,13 +512,16 @@ function App() {
         </div>
       </aside>
 
-      {/* Paywall = schließbares Upgrade-Overlay (keine Sperre) */}
       {showPaywall && <Paywall sub={sub} onSubscribe={subscribe} onClose={() => setShowPaywall(false)} />}
+      {rewardModal && <RewardModal data={rewardModal} name={authName} onClose={() => setRewardModal(null)} />}
+      {showCompleted && <GoalsHub overlay doneList={doneList} name={authName} onNew={() => { setShowCompleted(false); setCreatingGoal(true); }} onReopen={reopenGoal} onClose={() => setShowCompleted(false)} />}
 
       {/* Main */}
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
+        {/* Chrome-artige Ziel-Tabs oben */}
+        <GoalTabs goals={activeList} activeId={active.id} onSwitch={switchGoal} onNew={() => setCreatingGoal(true)} doneCount={doneList.length} onShowCompleted={() => setShowCompleted(true)} />
         <TrialBanner sub={sub} onManage={() => nav('account')} onUpgrade={() => setShowPaywall(true)} />
-        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onReset={() => { ['drw_profile','drw_coach','drw_assistant','drw_state','drw_sub','drw_authEmail','drw_authName'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
+        {view === 'dashboard' && <Dashboard profile={profile} coach={coach} state={state} onOpenMethod={id => { setActiveMethodId(id); setView('method'); }} onRegenerate={() => generateMethods(profile)} onComplete={() => completeGoal(active.id)} onReset={() => { ['drw_goals','drw_activeGoalId','drw_profile','drw_coach','drw_assistant','drw_state','drw_sub','drw_authEmail','drw_authName'].forEach(k=>LS.set(k,null)); location.reload(); }} nav={nav} />}
         {view === 'method' && activeMethod && <MethodDetail method={activeMethod} profile={profile} coach={coach} setCoach={setCoach} onBack={() => setView('dashboard')} />}
         {view === 'focus' && <Focus profile={profile} state={state} patch={patch} onStart={startBlock} onSkip={skipBlock} updateLog={updateLog} />}
         {view === 'insights' && <Insights state={state} />}
@@ -467,10 +529,80 @@ function App() {
         {view === 'assistant' && <div className="lg:hidden h-[calc(100vh-6rem)]"><Assistant profile={profile} coach={coach} state={state} messages={assistant} setMessages={setAssistant} /></div>}
       </main>
 
-      {/* Bottom Nav (Mobile) */}
       <BottomNav view={view} nav={nav} />
     </div>
   );
+}
+
+/* ============================ Ziel-Tabs (Chrome-artig) ============================ */
+const goalIcon = goal => { const d = goalDomain(goal); return { fitness: '💪', business: '🚀', learning: '📚', health: '🧘', general: '🎯' }[d] || '🎯'; };
+const shortGoal = g => { const s = String(g || 'Ziel').trim(); return s.length > 20 ? s.slice(0, 20) + '…' : s; };
+function GoalTabs({ goals, activeId, onSwitch, onNew, doneCount, onShowCompleted }) {
+  return (
+    <div className="sticky top-0 z-40 flex items-stretch gap-1 px-2 pt-2 bg-black/60 backdrop-blur border-b border-white/10 overflow-x-auto">
+      {goals.map(g => {
+        const on = g.id === activeId;
+        return (
+          <button key={g.id} onClick={() => onSwitch(g.id)} title={g.profile.goal}
+            className={'shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-t-xl text-sm border-b-2 transition max-w-[220px] ' + (on ? 'bg-white/10 border-emerald-400 text-white font-semibold' : 'bg-white/[0.03] border-transparent text-zinc-400 hover:bg-white/5')}>
+            <span>{goalIcon(g.profile.goal)}</span><span className="truncate">{shortGoal(g.profile.goal)}</span>
+          </button>
+        );
+      })}
+      <button onClick={onNew} title="Neues Ziel" className="shrink-0 w-9 my-1 rounded-lg bg-white/5 border border-white/10 hover:border-emerald-400/50 grid place-items-center text-emerald-300 text-lg">＋</button>
+      <div className="flex-1" />
+      {doneCount > 0 && <button onClick={onShowCompleted} title="Erreichte Ziele" className="shrink-0 my-1 px-3 rounded-lg bg-white/5 border border-white/10 hover:border-amber-400/40 text-sm text-amber-200 flex items-center gap-1">🏆 {doneCount}</button>}
+    </div>
+  );
+}
+
+/* ============================ Reward beim Zielerreichen ============================ */
+function RewardModal({ data, name, onClose }) {
+  const { goal, reward } = data;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-5" onClick={onClose}>
+      <div className="w-full max-w-md glass rounded-3xl p-7 text-center animate-fadeUp" onClick={e => e.stopPropagation()}>
+        <div className="text-6xl mb-3 animate-floaty">{reward.emoji}</div>
+        <div className="text-xs uppercase tracking-widest text-amber-300/80 font-semibold mb-1">Ziel erreicht 🎉</div>
+        <h1 className="text-2xl font-extrabold mb-1">{reward.title}</h1>
+        <p className="text-zinc-300 text-sm mb-2">{name ? name + ', ' : ''}„{goal.profile.goal}" ist geschafft!</p>
+        <p className="text-zinc-400 text-sm mb-5">{reward.msg}</p>
+        <div className="flex items-center justify-center gap-2 mb-5"><Rex size={40} bob /><span className="text-sm text-emerald-300">Rex ist stolz auf dich.</span></div>
+        <button onClick={onClose} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">Weiter →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ Erreichte Ziele (Hub) ============================ */
+function GoalsHub({ doneList, name, onNew, onReopen, onClose, overlay }) {
+  const inner = (
+    <div className="w-full max-w-lg glass rounded-3xl p-7 animate-fadeUp">
+      {onClose && <button onClick={onClose} aria-label="Schließen" className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:border-white/30 grid place-items-center text-lg text-zinc-300">✕</button>}
+      <div className="mb-3"><Rex size={44} bob /></div>
+      <h1 className="text-2xl font-extrabold mb-1">🏆 Erreichte Ziele</h1>
+      <p className="text-zinc-400 text-sm mb-5">{name ? name + ', deine' : 'Deine'} abgehakten Ziele — Beweis, dass du lieferst.</p>
+      {doneList.length === 0 ? (
+        <p className="text-sm text-zinc-500 mb-5">Noch keine erreichten Ziele. Hak dein erstes Ziel im Dashboard mit „Ziel erreicht" ab.</p>
+      ) : (
+        <div className="space-y-2.5 mb-5">
+          {doneList.map(g => (
+            <div key={g.id} className="glass rounded-2xl p-4 flex items-center gap-3">
+              <div className="text-2xl">{g.reward ? g.reward.emoji : '✅'}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate flex items-center gap-2"><span className="text-emerald-400">✓</span>{g.profile.goal}</div>
+                <div className="text-xs text-zinc-500">{g.reward ? g.reward.title + ' · ' : ''}{g.doneAt ? new Date(g.doneAt).toLocaleDateString('de-DE') : ''}</div>
+              </div>
+              {onReopen && <button onClick={() => onReopen(g.id)} className="shrink-0 text-xs text-zinc-400 hover:text-white underline">wieder öffnen</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={onNew} className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-white">＋ Neues Ziel starten</button>
+    </div>
+  );
+  if (overlay) return <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-5" onClick={onClose}><div className="relative w-full max-w-lg" onClick={e => e.stopPropagation()}>{inner}</div></div>;
+  return <div className="min-h-screen ambient flex items-center justify-center p-5"><div className="relative w-full max-w-lg">{inner}</div></div>;
 }
 
 /* ============================ Rex – Maskottchen ============================ */
@@ -537,7 +669,7 @@ function BottomNav({ view, nav }) {
 }
 
 /* ============================ Onboarding ============================ */
-function Onboarding({ onDone }) {
+function Onboarding({ onDone, isNew, name, onCancel }) {
   const [step, setStep] = useState(0);
   const [stoerfaktor, setStoer] = useState('');
   const [goal, setGoal] = useState('');
@@ -546,7 +678,7 @@ function Onboarding({ onDone }) {
   const [baselineMinutes, setBaseline] = useState(25);
 
   const steps = [
-    { emoji: '🔒', title: 'Willkommen bei DoRealWork', sub: 'Sag mir dein Ziel — ich zeige dir die schnellsten Wege dorthin und coache dich in jeder Disziplin.', body: <p className="text-zinc-400 text-sm">In unter einer Minute kennt dich dein Coach. Danach bekommst du Methoden, Schritt-für-Schritt-Coaching und einen KI-Assistenten, der immer für dich da ist.</p>, valid: true, next: "Los geht's" },
+    { emoji: '🎯', title: isNew ? 'Neues Ziel starten' : (name ? `Willkommen, ${name}!` : 'Willkommen bei DoRealWork'), sub: isNew ? 'Jedes Ziel bekommt seinen eigenen Bereich (Tab) mit eigenem Coaching. Los geht’s mit ein paar Fragen.' : 'Sag mir dein Ziel — ich zeige dir die schnellsten Wege dorthin und coache dich in jeder Disziplin.', body: <p className="text-zinc-400 text-sm">In unter einer Minute kennt dich dein Coach. Danach bekommst du Methoden, Schritt-für-Schritt-Coaching und einen KI-Assistenten, der immer für dich da ist.</p>, valid: true, next: "Los geht's" },
     { emoji: '📵', title: 'Was stört dich am meisten?', sub: 'Dein größter Störfaktor bei der Arbeit — den greifen wir gezielt an.', body: <input autoFocus value={stoerfaktor} onChange={e => setStoer(e.target.value)} placeholder="z. B. Ich spiele zu viel am Handy" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-emerald-400/60" />, valid: stoerfaktor.trim().length > 1 },
     { emoji: '🎯', title: 'Was ist dein Ziel?', sub: 'Je konkreter, desto besser die Methoden.', body: <input autoFocus value={goal} onChange={e => setGoal(e.target.value)} placeholder="z. B. Einen besseren Körper / Ein Startup gründen" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-emerald-400/60" />, valid: goal.trim().length > 1 },
     { emoji: '🧱', title: 'Was hindert dich, dein Ziel zu erreichen?', sub: 'Ich gebe dir gleich konkrete Wege, das zu lösen.', body: <input autoFocus value={hindernis} onChange={e => setHindernis(e.target.value)} placeholder="z. B. Keine Zeit / weiß nicht wo anfangen / keine Motivation" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-emerald-400/60" />, valid: hindernis.trim().length > 1 },
@@ -564,7 +696,8 @@ function Onboarding({ onDone }) {
         <div className="mb-6">{cur.body}</div>
         <div className="flex gap-3">
           {step > 0 && <button onClick={() => setStep(step - 1)} className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 text-sm">Zurück</button>}
-          <button disabled={!cur.valid} onClick={() => last ? onDone({ stoerfaktor, goal, hindernis, chronotype, baselineMinutes, onboarded: true }) : setStep(step + 1)} className={'flex-1 px-4 py-3 rounded-xl font-semibold text-white transition ' + (cur.valid ? 'btn-primary' : 'bg-white/5 text-zinc-500 cursor-not-allowed')}>{last ? 'Coach aktivieren →' : (cur.next || 'Weiter')}</button>
+          {step === 0 && onCancel && <button onClick={onCancel} className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 text-sm">Abbrechen</button>}
+          <button disabled={!cur.valid} onClick={() => last ? onDone({ stoerfaktor, goal, hindernis, chronotype, baselineMinutes, name: name || undefined, onboarded: true }) : setStep(step + 1)} className={'flex-1 px-4 py-3 rounded-xl font-semibold text-white transition ' + (cur.valid ? 'btn-primary' : 'bg-white/5 text-zinc-500 cursor-not-allowed')}>{last ? (isNew ? 'Ziel erstellen →' : 'Coach aktivieren →') : (cur.next || 'Weiter')}</button>
         </div>
       </div>
     </div>
@@ -572,8 +705,9 @@ function Onboarding({ onDone }) {
 }
 
 /* ============================ Dashboard ============================ */
-function Dashboard({ profile, coach, state, onOpenMethod, onRegenerate, onReset, nav }) {
+function Dashboard({ profile, coach, state, onOpenMethod, onRegenerate, onComplete, onReset, nav }) {
   const loading = !coach || coach.loading;
+  const [confirm, setConfirm] = useState(false);
   return (
     <div className="max-w-3xl mx-auto px-5 pt-8">
       <div className="flex items-center justify-between mb-6 lg:hidden"><Brand /><SourceBadge source={coach && coach.source} /></div>
@@ -581,10 +715,23 @@ function Dashboard({ profile, coach, state, onOpenMethod, onRegenerate, onReset,
       {profile.name && <div className="flex items-center gap-2 mb-4 animate-fadeUp"><Rex size={30} /><div className="text-lg font-bold">Guten {timeOfDay()}, {profile.name}! <span className="font-normal text-zinc-400 text-sm">Rex ist bereit.</span></div></div>}
 
       <div className="glass rounded-3xl p-6 mb-6 animate-fadeUp">
-        <div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold mb-1">Dein Ziel</div>
-        <h1 className="text-2xl font-extrabold mb-2">{profile.goal}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-widest text-emerald-300/80 font-semibold mb-1">Dein Ziel</div>
+            <h1 className="text-2xl font-extrabold mb-2">{profile.goal}</h1>
+          </div>
+          {onComplete && !confirm && <button onClick={() => setConfirm(true)} title="Ziel als erreicht markieren" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-400/30 hover:bg-emerald-500/20 text-emerald-200 text-sm font-semibold">✓ Ziel erreicht</button>}
+        </div>
+        {confirm && (
+          <div className="mt-2 mb-1 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 p-4 animate-fadeUp">
+            <div className="text-sm font-semibold mb-2">🎉 „{profile.goal}" wirklich erreicht?</div>
+            <div className="flex gap-2">
+              <button onClick={() => { setConfirm(false); onComplete(); }} className="btn-primary px-4 py-2 rounded-lg text-sm font-semibold text-white">Ja, abhaken & Reward</button>
+              <button onClick={() => setConfirm(false)} className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-zinc-300">Noch nicht</button>
+            </div>
+          </div>
+        )}
         {loading ? <div className="text-sm text-zinc-400 flex items-center gap-2"><Spinner /> Dein Coach entwickelt deine Methoden…</div> : coach.intro && <p className="text-zinc-300 text-sm leading-relaxed">{coach.intro}</p>}
-        <div className="hidden lg:block absolute" />
       </div>
 
       {!loading && (
